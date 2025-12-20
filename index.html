@@ -8,11 +8,10 @@
 </head>
 <body>
   <div class="app">
-    <!-- Top Bar -->
+
     <header class="topbar">
       <div class="brand">
         <div class="brand__logo" aria-hidden="true">
-          <!-- simple owl-ish blob icon (original) -->
           <svg viewBox="0 0 24 24" class="ico">
             <path d="M12 3c4.8 0 9 3.2 9 8.3C21 17.4 16.8 21 12 21S3 17.4 3 11.3C3 6.2 7.2 3 12 3Z"></path>
             <circle cx="8.7" cy="11" r="1.6"></circle>
@@ -35,26 +34,26 @@
           <span class="pill__ico">🔥</span>
           <span id="streakValue" class="pill__val">0</span>
         </div>
-        <div class="pill pill--heart" title="Жизни">
-          <span class="pill__ico">❤️</span>
-          <span id="heartsValue" class="pill__val">5</span>
-        </div>
       </div>
     </header>
 
-    <!-- Main -->
+    <nav class="tabs">
+      <button class="tab tab--active" data-tab="home">🏠 Главная</button>
+      <button class="tab" data-tab="practice">🎯 Практика</button>
+      <button class="tab" data-tab="league">🏆 Лига</button>
+      <button class="tab" data-tab="vocab">📚 Словарь</button>
+    </nav>
+
     <main class="main">
-      <!-- HOME (path) -->
+      <!-- HOME -->
       <section id="homeView" class="view view--active">
         <div class="hero">
           <div class="hero__left">
             <h1>Учись быстро, приятно и без духоты</h1>
-            <p>
-              Выбирай уроки по пути, набирай опыт, держи серию и не сливай сердечки 😄
-            </p>
+            <p>Выбирай уроки по пути, набирай опыт и держи серию 😄</p>
             <div class="hero__row">
               <button id="continueBtn" class="btn btn--primary">Продолжить</button>
-              <button id="practiceBtn" class="btn btn--ghost">Тренировка</button>
+              <button id="openLeagueChatBtn" class="btn btn--ghost">🏆 Лига в чате</button>
             </div>
           </div>
 
@@ -70,6 +69,7 @@
                   <span class="muted">стандарт</span>
                 </div>
               </div>
+
               <div class="mini">
                 <div class="mini__item">
                   <div class="mini__k">Сегодня</div>
@@ -80,16 +80,83 @@
                   <div id="accuracy" class="mini__v">—</div>
                 </div>
               </div>
+
+              <div class="mini mini--one">
+                <div class="mini__item">
+                  <div class="mini__k">Изучено слов</div>
+                  <div id="vocabCount" class="mini__v">0</div>
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
 
         <div class="section-title">
           <h2>Путь обучения</h2>
-          <span class="muted">кликаешь узел → проходишь урок</span>
+          <span class="muted">Модули → уроки → задания</span>
         </div>
 
-        <div id="path" class="path"></div>
+        <div id="units" class="units"></div>
+      </section>
+
+      <!-- PRACTICE -->
+      <section id="practiceView" class="view">
+        <div class="section-title">
+          <h2>Практика</h2>
+          <span class="muted">Смешанные задания и повторение слов</span>
+        </div>
+
+        <div class="grid2">
+          <div class="card card--soft">
+            <div class="card__title">Быстрая тренировка</div>
+            <p class="muted">Случайный урок + микс типов заданий.</p>
+            <button id="practiceBtn" class="btn btn--primary">Начать</button>
+          </div>
+
+          <div class="card card--soft">
+            <div class="card__title">Повторение</div>
+            <p class="muted">Повторим слова, где ты чаще ошибался.</p>
+            <button id="reviewBtn" class="btn btn--ghost">Повторить слова</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- LEAGUE -->
+      <section id="leagueView" class="view">
+        <div class="section-title">
+          <h2>Лига недели</h2>
+          <span class="muted">Топ считается на стороне бота</span>
+        </div>
+
+        <div class="card card--soft">
+          <div class="card__title">Показать рейтинг</div>
+          <p class="muted">
+            Нажми кнопку — бот пришлёт топ-10 в чат (XP за текущую неделю).
+          </p>
+          <button id="leagueBtn" class="btn btn--primary">Показать в чате</button>
+        </div>
+      </section>
+
+      <!-- VOCAB -->
+      <section id="vocabView" class="view">
+        <div class="section-title">
+          <h2>Словарь</h2>
+          <span class="muted">Твои слова, прогресс и повторение</span>
+        </div>
+
+        <div class="grid2">
+          <div class="card card--soft">
+            <div class="card__title">Открыть словарь в чате</div>
+            <p class="muted">Бот покажет твои слова и статистику.</p>
+            <button id="vocabChatBtn" class="btn btn--ghost">Показать в чате</button>
+          </div>
+
+          <div class="card card--soft">
+            <div class="card__title">Список слов</div>
+            <div id="vocabList" class="vocabList"></div>
+          </div>
+        </div>
       </section>
 
       <!-- LESSON -->
@@ -109,12 +176,39 @@
         </div>
 
         <div class="card card--lesson">
+          <!-- AUDIO button (if task is audio) -->
+          <div id="audioRow" class="audioRow hidden">
+            <button id="playAudioBtn" class="btn btn--ghost btn--small">🔊 Прослушать</button>
+            <span class="muted">если не звучит — браузер запретил озвучку</span>
+          </div>
+
           <div class="prompt">
-            <div class="prompt__label">Переведи на <b>ES</b>:</div>
+            <div id="promptLabel" class="prompt__label">Переведи на <b>ES</b>:</div>
             <div id="questionText" class="prompt__word">—</div>
           </div>
 
-          <div id="options" class="options"></div>
+          <!-- MULTIPLE CHOICE -->
+          <div id="mcBlock" class="block">
+            <div id="options" class="options"></div>
+          </div>
+
+          <!-- WORD TILES -->
+          <div id="tilesBlock" class="block hidden">
+            <div class="tilesArea">
+              <div class="muted small">Собери фразу:</div>
+              <div id="built" class="built"></div>
+              <div id="tiles" class="tiles"></div>
+              <div class="row">
+                <button id="clearTilesBtn" class="btn btn--ghost btn--small">Очистить</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- TEXT INPUT -->
+          <div id="inputBlock" class="block hidden">
+            <div class="muted small">Введи перевод:</div>
+            <input id="textAnswer" class="textInput" placeholder="Например: gracias" />
+          </div>
 
           <div class="bottomRow">
             <div id="feedback" class="feedback" aria-live="polite"></div>
@@ -123,12 +217,11 @@
         </div>
 
         <div class="tip">
-          💡 Подсказка: можно ошибаться — главное держать темп. Серия и опыт решают.
+          💡 Подсказка: миксуем форматы, чтобы мозг реально учился, а не угадывал.
         </div>
       </section>
     </main>
 
-    <!-- Toast -->
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
   </div>
 
