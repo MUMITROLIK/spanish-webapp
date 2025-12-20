@@ -5,24 +5,131 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Spanish Trainer</title>
   <link rel="stylesheet" href="styles.css" />
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
   <div class="app">
-    <header class="top">
-      <div class="title">Spanish Trainer</div>
-      <div class="sub">мини-дуо режим 😄</div>
+    <!-- Top Bar -->
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand__logo" aria-hidden="true">
+          <!-- simple owl-ish blob icon (original) -->
+          <svg viewBox="0 0 24 24" class="ico">
+            <path d="M12 3c4.8 0 9 3.2 9 8.3C21 17.4 16.8 21 12 21S3 17.4 3 11.3C3 6.2 7.2 3 12 3Z"></path>
+            <circle cx="8.7" cy="11" r="1.6"></circle>
+            <circle cx="15.3" cy="11" r="1.6"></circle>
+            <path d="M12 13.2c1.6 0 2.7.8 3.4 1.6-.8 1.1-2 2-3.4 2s-2.6-.9-3.4-2c.7-.8 1.8-1.6 3.4-1.6Z"></path>
+          </svg>
+        </div>
+        <div class="brand__text">
+          <div class="brand__title">Spanish Trainer</div>
+          <div class="brand__sub">мини-дуо режим 😋</div>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="pill" title="Опыт">
+          <span class="pill__ico">⚡</span>
+          <span id="xpValue" class="pill__val">0</span>
+        </div>
+        <div class="pill" title="Серия дней">
+          <span class="pill__ico">🔥</span>
+          <span id="streakValue" class="pill__val">0</span>
+        </div>
+        <div class="pill pill--heart" title="Жизни">
+          <span class="pill__ico">❤️</span>
+          <span id="heartsValue" class="pill__val">5</span>
+        </div>
+      </div>
     </header>
 
-    <main class="card">
-      <div id="prompt" class="prompt"></div>
-      <div id="options" class="options"></div>
-      <div id="hint" class="hint"></div>
+    <!-- Main -->
+    <main class="main">
+      <!-- HOME (path) -->
+      <section id="homeView" class="view view--active">
+        <div class="hero">
+          <div class="hero__left">
+            <h1>Учись быстро, приятно и без духоты</h1>
+            <p>
+              Выбирай уроки по пути, набирай опыт, держи серию и не сливай сердечки 😄
+            </p>
+            <div class="hero__row">
+              <button id="continueBtn" class="btn btn--primary">Продолжить</button>
+              <button id="practiceBtn" class="btn btn--ghost">Тренировка</button>
+            </div>
+          </div>
+
+          <div class="hero__right">
+            <div class="card card--soft">
+              <div class="card__title">Цель дня</div>
+              <div class="goal">
+                <div class="goal__bar">
+                  <div id="goalFill" class="goal__fill"></div>
+                </div>
+                <div class="goal__meta">
+                  <span id="goalText">0 / 50 XP</span>
+                  <span class="muted">стандарт</span>
+                </div>
+              </div>
+              <div class="mini">
+                <div class="mini__item">
+                  <div class="mini__k">Сегодня</div>
+                  <div id="todayAnswers" class="mini__v">0 ответов</div>
+                </div>
+                <div class="mini__item">
+                  <div class="mini__k">Точность</div>
+                  <div id="accuracy" class="mini__v">—</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-title">
+          <h2>Путь обучения</h2>
+          <span class="muted">кликаешь узел → проходишь урок</span>
+        </div>
+
+        <div id="path" class="path"></div>
+      </section>
+
+      <!-- LESSON -->
+      <section id="lessonView" class="view">
+        <div class="lessonTop">
+          <button id="backHome" class="btn btn--ghost btn--small">← Назад</button>
+
+          <div class="progress">
+            <div class="progress__bar">
+              <div id="progressFill" class="progress__fill"></div>
+            </div>
+            <div class="progress__meta">
+              <span id="lessonTitle" class="progress__title">Урок</span>
+              <span id="stepMeta" class="muted">1 / 5</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card card--lesson">
+          <div class="prompt">
+            <div class="prompt__label">Переведи на <b>ES</b>:</div>
+            <div id="questionText" class="prompt__word">—</div>
+          </div>
+
+          <div id="options" class="options"></div>
+
+          <div class="bottomRow">
+            <div id="feedback" class="feedback" aria-live="polite"></div>
+            <button id="nextBtn" class="btn btn--primary" disabled>Дальше</button>
+          </div>
+        </div>
+
+        <div class="tip">
+          💡 Подсказка: можно ошибаться — главное держать темп. Серия и опыт решают.
+        </div>
+      </section>
     </main>
 
-    <footer class="footer">
-      <button id="nextBtn" class="btn" disabled>Дальше</button>
-    </footer>
+    <!-- Toast -->
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
   </div>
 
   <script src="app.js"></script>
