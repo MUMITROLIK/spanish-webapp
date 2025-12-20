@@ -478,3 +478,55 @@ body{
   .grid2{ grid-template-columns: 1fr; }
   .brand{ min-width: 0; }
 }
+.path{
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 10px 4px 18px 4px;
+}
+
+.pathNode{
+  width: 100%;
+  display:flex;
+  justify-content: flex-start;
+}
+
+.pathNode--right{ justify-content: flex-end; }
+.pathNode--center{ justify-content: center; }
+
+.nodeBtn{
+  width: 74px;
+  height: 74px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.06);
+  box-shadow: var(--shadow2);
+  display:grid;
+  place-items:center;
+  cursor:pointer;
+  transition: transform .12s ease, filter .12s ease;
+}
+.nodeBtn:hover{ transform: translateY(-2px); filter: brightness(1.05); }
+
+.nodeBtn--done{
+  background: rgba(44,226,107,.15);
+  border-color: rgba(44,226,107,.25);
+}
+.nodeBtn--next{
+  background: rgba(74,163,255,.14);
+  border-color: rgba(74,163,255,.25);
+}
+
+.nodeText{
+  margin-top: 8px;
+  text-align:center;
+  font-weight: 900;
+  color: var(--text);
+}
+.nodeSub{
+  text-align:center;
+  color: var(--muted);
+  font-size: 12px;
+}
+
