@@ -1,122 +1,164 @@
-/* =========================
-   Spanish Trainer (Duolingo-ish vibe)
-   - Home "path" with lessons
-   - Lesson flow: 5 questions
-   - XP, streak, hearts
-   - Saves progress in localStorage
-   - Sends answer events to Telegram bot via WebApp.sendData()
-   ========================= */
+/* Spanish Trainer v2:
+   - NO hearts (no limits)
+   - Units/modules tree
+   - Task types: mc / tiles / audio / input
+   - Vocab & review
+   - League in chat via sendData
+*/
 
-const LS_KEY = "spanish_trainer_state_v1";
+const LS_KEY = "spanish_trainer_state_v2";
 const DAILY_XP_GOAL = 50;
-const MAX_HEARTS = 5;
 
 const $ = (id) => document.getElementById(id);
 
-const homeView = $("homeView");
-const lessonView = $("lessonView");
-const pathEl = $("path");
+const views = {
+  home: $("homeView"),
+  practice: $("practiceView"),
+  league: $("leagueView"),
+  vocab: $("vocabView"),
+  lesson: $("lessonView"),
+};
+
+const tabs = [...document.querySelectorAll(".tab")];
 
 const xpValue = $("xpValue");
 const streakValue = $("streakValue");
-const heartsValue = $("heartsValue");
-
 const goalFill = $("goalFill");
 const goalText = $("goalText");
 const todayAnswers = $("todayAnswers");
 const accuracyEl = $("accuracy");
+const vocabCount = $("vocabCount");
+
+const unitsEl = $("units");
 
 const continueBtn = $("continueBtn");
+const openLeagueChatBtn = $("openLeagueChatBtn");
+
 const practiceBtn = $("practiceBtn");
+const reviewBtn = $("reviewBtn");
+const leagueBtn = $("leagueBtn");
+const vocabChatBtn = $("vocabChatBtn");
 
 const backHomeBtn = $("backHome");
 const lessonTitle = $("lessonTitle");
 const progressFill = $("progressFill");
 const stepMeta = $("stepMeta");
 const questionText = $("questionText");
+const promptLabel = $("promptLabel");
+
+const audioRow = $("audioRow");
+const playAudioBtn = $("playAudioBtn");
+
+const mcBlock = $("mcBlock");
 const optionsEl = $("options");
+
+const tilesBlock = $("tilesBlock");
+const tilesEl = $("tiles");
+const builtEl = $("built");
+const clearTilesBtn = $("clearTilesBtn");
+
+const inputBlock = $("inputBlock");
+const textAnswer = $("textAnswer");
+
 const nextBtn = $("nextBtn");
 const feedback = $("feedback");
 
+const vocabList = $("vocabList");
 const toast = $("toast");
 
-// ---------- Telegram WebApp ----------
+// Telegram WebApp
 const tg = window.Telegram?.WebApp || null;
 if (tg) {
-  try {
-    tg.ready();
-    tg.expand();
-  } catch {}
+  try { tg.ready(); tg.expand(); } catch {}
 }
 
-// ---------- Content (you can expand later) ----------
+// ------------------- Course -------------------
 const COURSE = {
   units: [
     {
-      title: "Модуль 1 • Основы",
+      title: "Модуль 1 • База",
       lessons: [
-        {
-          id: "u1l1",
-          title: "Приветствия",
-          xp: 10,
-          questions: [
-            { id: 1, ru: "привет", options: ["hola", "gracias", "por favor", "adiós"], correct: "hola" },
-            { id: 2, ru: "пока", options: ["buenas", "adiós", "sí", "no"], correct: "adiós" },
-            { id: 3, ru: "да", options: ["sí", "no", "hola", "gracias"], correct: "sí" },
-            { id: 4, ru: "нет", options: ["por favor", "no", "hola", "buenas"], correct: "no" },
-            { id: 5, ru: "спасибо", options: ["hola", "gracias", "por favor", "adiós"], correct: "gracias" },
-          ],
-        },
-        {
-          id: "u1l2",
-          title: "Вежливость",
-          xp: 12,
-          questions: [
-            { id: 6, ru: "пожалуйста", options: ["por favor", "gracias", "hola", "adiós"], correct: "por favor" },
-            { id: 7, ru: "доброе утро", options: ["buenos días", "buenas noches", "hola", "gracias"], correct: "buenos días" },
-            { id: 8, ru: "добрый вечер", options: ["buenas tardes", "buenas noches", "por favor", "adiós"], correct: "buenas tardes" },
-            { id: 9, ru: "доброй ночи", options: ["buenos días", "buenas noches", "hola", "sí"], correct: "buenas noches" },
-            { id: 10, ru: "извините", options: ["perdón", "por favor", "gracias", "adiós"], correct: "perdón" },
-          ],
-        },
-        {
-          id: "u1l3",
-          title: "Кафе",
-          xp: 14,
-          questions: [
-            { id: 11, ru: "кофе", options: ["café", "agua", "pan", "leche"], correct: "café" },
-            { id: 12, ru: "вода", options: ["té", "agua", "café", "jugo"], correct: "agua" },
-            { id: 13, ru: "молоко", options: ["pan", "leche", "azúcar", "sal"], correct: "leche" },
-            { id: 14, ru: "хлеб", options: ["pan", "pollo", "pescado", "queso"], correct: "pan" },
-            { id: 15, ru: "сахар", options: ["sal", "azúcar", "café", "leche"], correct: "azúcar" },
-          ],
-        },
+        { id: "u1l1", title: "Приветствия", xp: 12 },
+        { id: "u1l2", title: "Вежливость", xp: 14 },
+        { id: "u1l3", title: "Кафе", xp: 16 },
+      ],
+    },
+    {
+      title: "Модуль 2 • Люди",
+      lessons: [
+        { id: "u2l1", title: "Семья", xp: 16 },
+        { id: "u2l2", title: "Чувства", xp: 18 },
       ],
     },
   ],
 };
 
-// ---------- State ----------
+// База заданий (мы расширим позже — но уже есть все типы)
+const TASKS = {
+  u1l1: [
+    // mc
+    { type:"mc", id: 1, ru:"спасибо", right:"gracias", options:["hola","gracias","por favor","adiós"] },
+    // tiles
+    { type:"tiles", id: 2, ru:"доброе утро", right:"buenos días" },
+    // input
+    { type:"input", id: 3, ru:"пожалуйста", right:"por favor" },
+    // audio (играем испанский)
+    { type:"audio", id: 4, ru:"привет", right:"hola", options:["hola","gracias","por favor","adiós"] },
+    { type:"mc", id: 5, ru:"пока", right:"adiós", options:["buenas","adiós","sí","no"] },
+  ],
+  u1l2: [
+    { type:"input", id: 6, ru:"извините", right:"perdón" },
+    { type:"mc", id: 7, ru:"да", right:"sí", options:["sí","no","hola","gracias"] },
+    { type:"tiles", id: 8, ru:"спасибо большое", right:"muchas gracias" },
+    { type:"audio", id: 9, ru:"нет", right:"no", options:["por favor","no","hola","buenas"] },
+    { type:"mc", id: 10, ru:"доброй ночи", right:"buenas noches", options:["buenos días","buenas noches","hola","sí"] },
+  ],
+  u1l3: [
+    { type:"mc", id: 11, ru:"кофе", right:"café", options:["café","agua","pan","leche"] },
+    { type:"mc", id: 12, ru:"вода", right:"agua", options:["té","agua","café","jugo"] },
+    { type:"input", id: 13, ru:"молоко", right:"leche" },
+    { type:"tiles", id: 14, ru:"я хочу кофе", right:"quiero café" },
+    { type:"audio", id: 15, ru:"хлеб", right:"pan", options:["pan","pollo","pescado","queso"] },
+  ],
+  u2l1: [
+    { type:"mc", id: 16, ru:"мама", right:"madre", options:["madre","padre","hermano","amigo"] },
+    { type:"mc", id: 17, ru:"папа", right:"padre", options:["madre","padre","hermana","amiga"] },
+    { type:"input", id: 18, ru:"друг", right:"amigo" },
+    { type:"tiles", id: 19, ru:"моя семья", right:"mi familia" },
+    { type:"audio", id: 20, ru:"брат", right:"hermano", options:["hermano","hermana","amigo","padre"] },
+  ],
+  u2l2: [
+    { type:"mc", id: 21, ru:"я счастлив", right:"estoy feliz", options:["estoy feliz","estoy triste","tengo hambre","tengo sueño"] },
+    { type:"tiles", id: 22, ru:"мне грустно", right:"estoy triste" },
+    { type:"input", id: 23, ru:"я устал", right:"estoy cansado" },
+    { type:"audio", id: 24, ru:"я голоден", right:"tengo hambre", options:["tengo hambre","tengo sueño","estoy feliz","por favor"] },
+    { type:"mc", id: 25, ru:"я хочу спать", right:"tengo sueño", options:["tengo sueño","tengo hambre","hola","adiós"] },
+  ],
+};
+
+// ------------------- State -------------------
 function defaultState() {
   return {
     xp: 0,
-    hearts: MAX_HEARTS,
     streak: 0,
-    lastActiveDay: null,        // "YYYY-MM-DD"
+    lastActiveDay: null,   // YYYY-MM-DD
+    lastStreakDay: null,   // YYYY-MM-DD
     todayXp: 0,
     todayAnswers: 0,
     todayCorrect: 0,
-    // progress
-    completed: {},              // lessonId -> { doneAtDay, score }
-    lastLessonId: COURSE.units[0].lessons[0].id,
+
+    completed: {},         // lessonId -> doneAtDay
+    lastLessonId: "u1l1",
+
+    vocab: {
+      // "ru|es": {ru, es, correct, wrong, lastSeenDay}
+    },
   };
 }
 
 let state = loadState();
-syncTopUI();
-renderHome();
 
-// ---------- Helpers ----------
+// ------------------- Utils -------------------
 function dayKey() {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -143,13 +185,16 @@ function saveState() {
 function resetIfNewDay() {
   const today = dayKey();
   if (state.lastActiveDay !== today) {
-    // new day: reset daily counters
     state.todayXp = 0;
     state.todayAnswers = 0;
     state.todayCorrect = 0;
     state.lastActiveDay = today;
     saveState();
   }
+}
+
+function clamp(n, a, b) {
+  return Math.max(a, Math.min(b, n));
 }
 
 function showToast(msg) {
@@ -159,294 +204,547 @@ function showToast(msg) {
   showToast._t = setTimeout(() => toast.classList.remove("toast--show"), 1500);
 }
 
-function clamp(n, a, b) {
-  return Math.max(a, Math.min(b, n));
+function normalizeText(s) {
+  return String(s || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[¡!¿?.,;:]/g, "");
 }
 
-// ---------- UI ----------
+function vocabKey(ru, es) {
+  return `${ru}|${es}`;
+}
+
+function addVocab(ru, es, isCorrect) {
+  const k = vocabKey(ru, es);
+  const v = state.vocab[k] || { ru, es, correct: 0, wrong: 0, lastSeenDay: dayKey() };
+  v.lastSeenDay = dayKey();
+  if (isCorrect) v.correct += 1;
+  else v.wrong += 1;
+  state.vocab[k] = v;
+}
+
+function getVocabStats() {
+  const arr = Object.values(state.vocab);
+  const count = arr.length;
+  // words with worse mastery first
+  const sorted = arr.sort((a, b) => (b.wrong - b.correct) - (a.wrong - a.correct));
+  return { count, sorted };
+}
+
+// ------------------- Views / Tabs -------------------
+function setView(name) {
+  Object.keys(views).forEach(k => views[k].classList.toggle("view--active", k === name));
+  tabs.forEach(t => t.classList.toggle("tab--active", t.dataset.tab === name));
+}
+
+tabs.forEach(btn => {
+  btn.addEventListener("click", () => {
+    const tab = btn.dataset.tab;
+    if (tab) {
+      setView(tab);
+      if (tab === "home") renderHome();
+      if (tab === "vocab") renderVocab();
+    }
+  });
+});
+
+// ------------------- Home (Units tree) -------------------
+function allLessonsFlat() {
+  return COURSE.units.flatMap(u => u.lessons);
+}
+
+function getNextLessonId() {
+  const lessons = allLessonsFlat();
+  for (const l of lessons) {
+    if (!state.completed[l.id]) return l.id;
+  }
+  return lessons[lessons.length - 1]?.id || "u1l1";
+}
+
 function syncTopUI() {
   resetIfNewDay();
 
   xpValue.textContent = String(state.xp);
-  heartsValue.textContent = String(state.hearts);
   streakValue.textContent = String(state.streak);
 
-  // goal
   const pct = clamp((state.todayXp / DAILY_XP_GOAL) * 100, 0, 100);
   goalFill.style.width = `${pct}%`;
   goalText.textContent = `${state.todayXp} / ${DAILY_XP_GOAL} XP`;
 
   todayAnswers.textContent = `${state.todayAnswers} ответов`;
-
   const acc = state.todayAnswers > 0
     ? Math.round((state.todayCorrect / state.todayAnswers) * 100)
     : null;
   accuracyEl.textContent = acc === null ? "—" : `${acc}%`;
 
-  // Continue button should point to next not-done lesson (or last)
-  const nextId = getNextLessonId();
-  state.lastLessonId = nextId;
-  saveState();
-}
+  const vs = getVocabStats();
+  vocabCount.textContent = String(vs.count);
 
-function setView(which) {
-  homeView.classList.toggle("view--active", which === "home");
-  lessonView.classList.toggle("view--active", which === "lesson");
+  state.lastLessonId = getNextLessonId();
+  saveState();
 }
 
 function renderHome() {
   syncTopUI();
+  unitsEl.innerHTML = "";
 
-  pathEl.innerHTML = "";
-  const grid = document.createElement("div");
-  grid.className = "pathGrid";
+  const nextId = getNextLessonId();
 
-  const lessons = COURSE.units.flatMap(u => u.lessons);
+  COURSE.units.forEach((unit) => {
+    const wrap = document.createElement("div");
+    wrap.className = "unit";
 
-  lessons.forEach((lesson, idx) => {
-    const done = Boolean(state.completed[lesson.id]);
-    const next = lesson.id === getNextLessonId();
+    const doneCount = unit.lessons.filter(l => state.completed[l.id]).length;
 
-    const node = document.createElement("div");
-    node.className = "node";
-    node.setAttribute("role", "button");
-    node.tabIndex = 0;
+    const head = document.createElement("div");
+    head.className = "unitHead";
+    head.innerHTML = `<b>${unit.title}</b><span>${doneCount} / ${unit.lessons.length} пройдено</span>`;
+    wrap.appendChild(head);
 
-    const badge = document.createElement("div");
-    badge.className = "badge " + (done ? "badge--done" : (next ? "badge--next" : ""));
-    badge.textContent = done ? "✓" : String(idx + 1);
+    const list = document.createElement("div");
+    list.className = "lessonList";
 
-    const titleWrap = document.createElement("div");
-    titleWrap.className = "nodeTitle";
-    titleWrap.innerHTML = `<b>${lesson.title}</b><span>${lesson.xp} XP • ${done ? "пройдено" : "урок"}</span>`;
+    unit.lessons.forEach((lesson) => {
+      const done = Boolean(state.completed[lesson.id]);
+      const isNext = lesson.id === nextId;
 
-    const inner = document.createElement("div");
-    inner.className = "node__inner";
-    inner.appendChild(badge);
-    inner.appendChild(titleWrap);
-
-    node.appendChild(inner);
-
-    node.addEventListener("click", () => startLesson(lesson.id));
-    node.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") startLesson(lesson.id);
+      const card = document.createElement("div");
+      card.className = "lessonCard";
+      card.innerHTML = `
+        <div class="lessonTopRow">
+          <b>${lesson.title}</b>
+          <span class="tag ${done ? "tag--done" : (isNext ? "tag--next" : "")}">
+            ${done ? "✓" : (isNext ? "next" : `${lesson.xp} XP`)}
+          </span>
+        </div>
+        <div class="lessonMeta">Заданий: 5 • XP за урок: ${lesson.xp}</div>
+      `;
+      card.addEventListener("click", () => startLesson(lesson.id, { practice:false }));
+      list.appendChild(card);
     });
 
-    grid.appendChild(node);
+    wrap.appendChild(list);
+    unitsEl.appendChild(wrap);
   });
 
-  pathEl.appendChild(grid);
-
-  continueBtn.onclick = () => startLesson(getNextLessonId());
-  practiceBtn.onclick = () => {
-    // quick practice: pick random lesson even if done, but no path progress
-    const all = COURSE.units.flatMap(u => u.lessons);
-    const random = all[Math.floor(Math.random() * all.length)];
-    startLesson(random.id, { practice: true });
-  };
+  continueBtn.onclick = () => startLesson(getNextLessonId(), { practice:false });
+  openLeagueChatBtn.onclick = () => sendToBot({ type:"open_league" });
 }
 
-function getNextLessonId() {
-  const lessons = COURSE.units.flatMap(u => u.lessons);
-  for (const l of lessons) {
-    if (!state.completed[l.id]) return l.id;
-  }
-  // all done => loop to last
-  return lessons[lessons.length - 1].id;
-}
+// ------------------- Vocab view -------------------
+function renderVocab() {
+  syncTopUI();
+  const { sorted } = getVocabStats();
+  vocabList.innerHTML = "";
 
-// ---------- Lesson Engine ----------
-let currentLesson = null;
-let currentIndex = 0;
-let locked = false;
-let selected = null;
-let isPractice = false;
-
-function startLesson(lessonId, opts = {}) {
-  const lessons = COURSE.units.flatMap(u => u.lessons);
-  const lesson = lessons.find(l => l.id === lessonId) || lessons[0];
-
-  currentLesson = lesson;
-  currentIndex = 0;
-  locked = false;
-  selected = null;
-  isPractice = Boolean(opts.practice);
-
-  // If hearts 0, block (classic duo vibe)
-  if (state.hearts <= 0) {
-    showToast("❤️ Закончились сердечки. Тренировка попозже 😄");
+  if (sorted.length === 0) {
+    vocabList.innerHTML = `<div class="muted">Пока пусто. Пройди пару уроков — и тут появятся слова 😉</div>`;
     return;
   }
 
-  lessonTitle.textContent = isPractice ? `Тренировка • ${lesson.title}` : lesson.title;
-  setView("lesson");
-  renderQuestion();
+  sorted.slice(0, 100).forEach(v => {
+    const mastery = v.correct + v.wrong === 0 ? 0 : Math.round((v.correct / (v.correct + v.wrong)) * 100);
+    const el = document.createElement("div");
+    el.className = "vocabItem";
+    el.innerHTML = `
+      <b>${v.ru} → ${v.es}</b>
+      <div class="muted">✅ ${v.correct} • ❌ ${v.wrong} • мастерство ${mastery}%</div>
+    `;
+    vocabList.appendChild(el);
+  });
 }
 
-function renderQuestion() {
-  const q = currentLesson.questions[currentIndex];
-  selected = null;
+// ------------------- Practice view handlers -------------------
+practiceBtn.onclick = () => {
+  const all = allLessonsFlat();
+  const random = all[Math.floor(Math.random() * all.length)];
+  startLesson(random.id, { practice:true, mix:true });
+};
+
+reviewBtn.onclick = () => startReview();
+
+leagueBtn.onclick = () => sendToBot({ type:"open_league" });
+vocabChatBtn.onclick = () => sendToBot({ type:"open_vocab" });
+
+// ------------------- Lesson engine -------------------
+let currentLessonId = null;
+let tasks = [];
+let idx = 0;
+let locked = false;
+let selected = null;
+
+// tiles state
+let tilesLeft = [];
+let built = [];
+
+// input state
+let typed = "";
+
+// audio state
+let audioText = "";
+
+function buildTasks(lessonId, opts) {
+  const base = TASKS[lessonId] ? [...TASKS[lessonId]] : [];
+  // if mix, shuffle types a bit
+  if (opts?.mix) base.sort(() => Math.random() - 0.5);
+  return base;
+}
+
+function getLessonMeta(lessonId) {
+  const all = allLessonsFlat();
+  return all.find(l => l.id === lessonId) || all[0];
+}
+
+function startLesson(lessonId, opts = {}) {
+  currentLessonId = lessonId;
+  tasks = buildTasks(lessonId, opts);
+  idx = 0;
   locked = false;
+  selected = null;
+  tilesLeft = [];
+  built = [];
+  typed = "";
+  audioText = "";
+
+  const meta = getLessonMeta(lessonId);
+  lessonTitle.textContent = (opts.practice ? `Тренировка • ${meta.title}` : meta.title);
+
+  setView("lesson");
+  renderTask();
+}
+
+function renderTask() {
+  resetIfNewDay();
+
+  locked = false;
+  selected = null;
+  typed = "";
+  built = [];
+  tilesLeft = [];
+  audioText = "";
+
   nextBtn.disabled = true;
+  nextBtn.textContent = "Дальше";
 
   feedback.className = "feedback";
   feedback.textContent = "";
 
-  questionText.textContent = q.ru;
+  const t = tasks[idx];
+  const total = tasks.length;
 
-  // progress
-  const total = currentLesson.questions.length;
-  stepMeta.textContent = `${currentIndex + 1} / ${total}`;
-  progressFill.style.width = `${((currentIndex) / total) * 100}%`;
+  stepMeta.textContent = `${idx + 1} / ${total}`;
+  progressFill.style.width = `${(idx / total) * 100}%`;
 
+  // label
+  promptLabel.innerHTML = `Переведи на <b>ES</b>:`;
+  questionText.textContent = t.ru;
+
+  // hide all blocks
+  audioRow.classList.add("hidden");
+  mcBlock.classList.add("hidden");
+  tilesBlock.classList.add("hidden");
+  inputBlock.classList.add("hidden");
+
+  // reset blocks
   optionsEl.innerHTML = "";
-  q.options.forEach((opt) => {
+  tilesEl.innerHTML = "";
+  builtEl.innerHTML = "";
+  textAnswer.value = "";
+
+  if (t.type === "mc") {
+    mcBlock.classList.remove("hidden");
+    renderMC(t);
+  } else if (t.type === "audio") {
+    audioRow.classList.remove("hidden");
+    mcBlock.classList.remove("hidden");
+    audioText = t.right;
+    playAudioBtn.onclick = () => speakSpanish(audioText);
+    renderMC(t);
+  } else if (t.type === "tiles") {
+    tilesBlock.classList.remove("hidden");
+    renderTiles(t);
+  } else if (t.type === "input") {
+    inputBlock.classList.remove("hidden");
+    renderInput(t);
+  }
+}
+
+function renderMC(t) {
+  t.options.forEach(opt => {
     const b = document.createElement("button");
     b.className = "opt";
     b.type = "button";
     b.textContent = opt;
-
-    b.addEventListener("click", () => onSelectOption(b, opt));
+    b.addEventListener("click", () => {
+      if (locked) return;
+      [...optionsEl.children].forEach(el => el.classList.remove("opt--selected"));
+      b.classList.add("opt--selected");
+      selected = opt;
+      nextBtn.disabled = false;
+    });
     optionsEl.appendChild(b);
   });
 }
 
-function onSelectOption(btn, value) {
-  if (locked) return;
+function renderTiles(t) {
+  // split by spaces
+  const correctTokens = t.right.split(" ").filter(Boolean);
+  const shuffled = [...correctTokens].sort(() => Math.random() - 0.5);
 
-  // clear prev selection
-  [...optionsEl.children].forEach(el => el.classList.remove("opt--selected"));
-  btn.classList.add("opt--selected");
+  tilesLeft = shuffled;
+  built = [];
 
-  selected = value;
-  nextBtn.disabled = false;
-}
+  function rerender() {
+    builtEl.innerHTML = "";
+    built.forEach((w, i) => {
+      const chip = document.createElement("button");
+      chip.className = "tile";
+      chip.textContent = w;
+      chip.title = "Нажми чтобы убрать";
+      chip.onclick = () => {
+        if (locked) return;
+        built.splice(i, 1);
+        tilesLeft.push(w);
+        rerender();
+      };
+      builtEl.appendChild(chip);
+    });
 
-function gradeAnswer() {
-  const q = currentLesson.questions[currentIndex];
-  const correct = q.correct;
+    tilesEl.innerHTML = "";
+    tilesLeft.forEach((w, i) => {
+      const tile = document.createElement("button");
+      tile.className = "tile";
+      tile.textContent = w;
+      tile.onclick = () => {
+        if (locked) return;
+        built.push(w);
+        tilesLeft.splice(i, 1);
+        rerender();
+      };
+      tilesEl.appendChild(tile);
+    });
 
-  locked = true;
-
-  let isCorrect = selected === correct;
-
-  // mark all options
-  [...optionsEl.children].forEach(el => {
-    const v = el.textContent;
-    el.classList.remove("opt--selected");
-    if (v === correct) el.classList.add("opt--correct");
-    if (v === selected && v !== correct) el.classList.add("opt--wrong");
-    el.disabled = true;
-  });
-
-  // update state
-  resetIfNewDay();
-  state.todayAnswers += 1;
-
-  if (isCorrect) {
-    state.todayCorrect += 1;
-    const gain = 2; // per question
-    state.xp += gain;
-    state.todayXp += gain;
-    feedback.classList.add("feedback--ok");
-    feedback.textContent = `✅ Верно! +${gain} XP`;
-  } else {
-    state.hearts = Math.max(0, state.hearts - 1);
-    feedback.classList.add("feedback--bad");
-    feedback.textContent = `❌ Неверно. Правильно: ${correct}`;
+    nextBtn.disabled = built.length === 0;
   }
 
-  // Telegram sendData (for bot stats)
-  sendToBot({
-    type: "answer",
-    wordId: q.id,
-    chosen: selected,
-    correct: isCorrect,
-    ru: q.ru,
-    right: correct,
-    lessonId: currentLesson.id,
-    step: currentIndex + 1,
-  });
+  clearTilesBtn.onclick = () => {
+    if (locked) return;
+    tilesLeft = tilesLeft.concat(built);
+    built = [];
+    rerender();
+  };
+
+  rerender();
+}
+
+function renderInput(t) {
+  textAnswer.oninput = () => {
+    if (locked) return;
+    typed = textAnswer.value;
+    nextBtn.disabled = normalizeText(typed).length === 0;
+  };
+}
+
+function speakSpanish(text) {
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "es-ES";
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+    showToast("🔊 Слушай внимательно!");
+  } catch {
+    showToast("Браузер не дал озвучку 😅");
+  }
+}
+
+function grade() {
+  const t = tasks[idx];
+  locked = true;
+
+  let isCorrect = false;
+  let userAnswer = "";
+
+  if (t.type === "mc" || t.type === "audio") {
+    userAnswer = selected || "";
+    isCorrect = userAnswer === t.right;
+
+    // mark options
+    [...optionsEl.children].forEach(el => {
+      const v = el.textContent;
+      el.classList.remove("opt--selected");
+      if (v === t.right) el.classList.add("opt--correct");
+      if (v === userAnswer && v !== t.right) el.classList.add("opt--wrong");
+      el.disabled = true;
+    });
+  }
+
+  if (t.type === "tiles") {
+    userAnswer = built.join(" ").trim();
+    isCorrect = normalizeText(userAnswer) === normalizeText(t.right);
+  }
+
+  if (t.type === "input") {
+    userAnswer = typed || "";
+    isCorrect = normalizeText(userAnswer) === normalizeText(t.right);
+  }
+
+  // stats
+  state.todayAnswers += 1;
+  if (isCorrect) state.todayCorrect += 1;
+
+  // XP
+  const xpGain = isCorrect ? 2 : 0;
+  state.xp += xpGain;
+  state.todayXp += xpGain;
+
+  // vocab tracking
+  addVocab(t.ru, t.right, isCorrect);
 
   saveState();
   syncTopUI();
 
-  // progress visual
-  const total = currentLesson.questions.length;
-  progressFill.style.width = `${((currentIndex + 1) / total) * 100}%`;
+  // feedback
+  if (isCorrect) {
+    feedback.classList.add("feedback--ok");
+    feedback.textContent = `✅ Верно! +${xpGain} XP`;
+  } else {
+    feedback.classList.add("feedback--bad");
+    feedback.textContent = `❌ Неверно. Правильно: ${t.right}`;
+  }
+
+  // send to bot
+  sendToBot({
+    type: "answer",
+    wordId: t.id,
+    taskType: t.type,
+    lessonId: currentLessonId,
+    ru: t.ru,
+    right: t.right,
+    chosen: userAnswer,
+    correct: isCorrect,
+    xpGain,
+    step: idx + 1,
+  });
+
+  // progress bar
+  const total = tasks.length;
+  progressFill.style.width = `${((idx + 1) / total) * 100}%`;
+
+  // allow next
+  nextBtn.disabled = false;
+  nextBtn.textContent = (idx === tasks.length - 1) ? "Завершить" : "Дальше";
 }
 
 function finishLesson() {
   const today = dayKey();
+  const meta = getLessonMeta(currentLessonId);
 
-  // streak logic: if you completed a lesson today, streak++
-  // (very simplified but nice)
+  // streak: +1 раз в день после любого урока
   if (state.lastStreakDay !== today) {
     state.streak += 1;
     state.lastStreakDay = today;
   }
 
-  if (!isPractice) {
-    state.completed[currentLesson.id] = {
-      doneAtDay: today,
-      score: {
-        todayAnswers: state.todayAnswers,
-        todayCorrect: state.todayCorrect
-      }
-    };
-    state.lastLessonId = getNextLessonId();
-  }
+  // mark completed
+  state.completed[currentLessonId] = today;
+  state.lastLessonId = getNextLessonId();
 
-  // bonus XP for finishing lesson
-  const bonus = isPractice ? 6 : currentLesson.xp;
-  state.xp += bonus;
-  state.todayXp += bonus;
+  // bonus XP
+  const bonusXp = meta?.xp || 10;
+  state.xp += bonusXp;
+  state.todayXp += bonusXp;
 
   saveState();
   syncTopUI();
 
   sendToBot({
     type: "lesson_end",
-    lessonId: currentLesson.id,
-    practice: isPractice,
-    bonusXp: bonus,
-    day: today
+    lessonId: currentLessonId,
+    bonusXp,
+    day: today,
   });
 
-  showToast(`🏁 Урок завершён! +${bonus} XP`);
+  showToast(`🏁 Урок завершён! +${bonusXp} XP`);
   setTimeout(() => {
     setView("home");
     renderHome();
   }, 450);
 }
 
-function sendToBot(payload) {
-  if (!tg) return;
-  try {
-    tg.sendData(JSON.stringify(payload));
-  } catch {}
-}
-
-// ---------- Buttons ----------
-nextBtn.addEventListener("click", () => {
-  if (!locked) {
-    // first click after selecting = grade
-    if (!selected) return;
-    gradeAnswer();
-    nextBtn.textContent = (currentIndex === currentLesson.questions.length - 1) ? "Завершить" : "Дальше";
-    nextBtn.disabled = false;
+function startReview() {
+  // pick up to 5 worst words
+  const { sorted } = getVocabStats();
+  if (sorted.length === 0) {
+    showToast("Словарь пуст. Пройди уроки сначала 🙂");
     return;
   }
 
-  // already graded -> go next
-  currentIndex += 1;
-  nextBtn.textContent = "Дальше";
-  if (currentIndex >= currentLesson.questions.length) {
+  const picks = sorted.slice(0, 5);
+
+  // build review tasks: mix input + mc
+  currentLessonId = "review";
+  tasks = picks.map((v, i) => {
+    const type = i % 2 === 0 ? "input" : "mc";
+    if (type === "input") return { type:"input", id: 1000 + i, ru: v.ru, right: v.es };
+    // mc options: include right + random from vocab
+    const pool = sorted.map(x => x.es).filter(x => x !== v.es);
+    const opts = [v.es];
+    while (opts.length < 4 && pool.length) {
+      const r = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+      if (!opts.includes(r)) opts.push(r);
+    }
+    return { type:"mc", id: 1000 + i, ru: v.ru, right: v.es, options: opts.sort(() => Math.random() - 0.5) };
+  });
+
+  idx = 0;
+  lessonTitle.textContent = "Повторение • Словарь";
+  setView("lesson");
+  renderTask();
+}
+
+function sendToBot(payload) {
+  if (!tg) return;
+  try { tg.sendData(JSON.stringify(payload)); } catch {}
+}
+
+// Buttons
+nextBtn.addEventListener("click", () => {
+  // if not graded yet -> grade
+  if (!locked) {
+    // validation per type
+    const t = tasks[idx];
+    if (t.type === "mc" || t.type === "audio") {
+      if (!selected) return;
+    }
+    if (t.type === "tiles") {
+      if (!built.length) return;
+    }
+    if (t.type === "input") {
+      if (!normalizeText(typed).length) return;
+    }
+    grade();
+    return;
+  }
+
+  // go next
+  idx += 1;
+  locked = false;
+  selected = null;
+
+  if (idx >= tasks.length) {
+    // if review -> just toast and go home
+    if (currentLessonId === "review") {
+      showToast("✅ Повторение завершено!");
+      setView("practice");
+      return;
+    }
     finishLesson();
     return;
   }
 
-  renderQuestion();
+  renderTask();
 });
 
 backHomeBtn.addEventListener("click", () => {
@@ -454,5 +752,8 @@ backHomeBtn.addEventListener("click", () => {
   renderHome();
 });
 
-// initial
+// Init
+syncTopUI();
+renderHome();
 setView("home");
+renderVocab(); // prefill if user opens
