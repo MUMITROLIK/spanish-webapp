@@ -2,31 +2,68 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Spanish Trainer</title>
+
+  <!-- Telegram Mini App SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
   <link rel="stylesheet" href="./styles.css" />
 </head>
-
 <body>
-  <div id="app"></div>
+  <div id="app">
+    <!-- Top profile card -->
+    <div class="profileCard">
+      <div class="profileLeft">
+        <div class="pillAvatar"></div>
+        <div class="profileText">
+          <div class="profileTitle">Spanish Trainer</div>
+          <div class="profileSub">мини-дуо режим 😉 • без лимитов</div>
+        </div>
+      </div>
 
-  <!-- Modal (урок) -->
+      <div class="profileRight">
+        <div class="statPill">
+          <span class="ico">⚡</span>
+          <span id="xpTop">0</span>
+        </div>
+        <div class="statPill">
+          <span class="ico">🔥</span>
+          <span id="streakTop">0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabsWrap">
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-tab="home"><span class="tIco">🏠</span>Главная</button>
+        <button class="tab" data-tab="path"><span class="tIco">🧭</span>Путь</button>
+        <button class="tab" data-tab="practice"><span class="tIco">🎯</span>Практика</button>
+        <button class="tab" data-tab="vocab"><span class="tIco">📚</span>Словарь</button>
+      </div>
+    </div>
+
+    <!-- Screens -->
+    <div id="screen"></div>
+
+    <!-- Bottom spacer for safe-area -->
+    <div class="safe"></div>
+  </div>
+
+  <!-- Modal -->
   <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
     <div class="modalCard">
-      <div class="modalTop">
+      <div class="modalHead">
         <div class="modalTitle" id="modalTitle">Урок</div>
-        <button class="iconBtn" id="btnClose" aria-label="Закрыть">✕</button>
+        <button class="iconBtn" id="btnCloseModal" aria-label="Close">✕</button>
       </div>
 
-      <div class="modalBody">
-        <div class="prompt" id="prompt">Вопрос…</div>
-        <div class="options" id="options"></div>
+      <div class="modalBody" id="modalBody"></div>
 
-        <div class="hint" id="modalHint"></div>
-      </div>
-
-      <div class="modalBottom">
-        <button class="btn btnPrimary" id="btnCheck">Проверить</button>
+      <div class="modalBottom" id="modalBottom">
+        <button class="btn ghost" id="btnSecondary">Закрыть</button>
+        <button class="btn" id="btnPrimary">Проверить</button>
       </div>
     </div>
   </div>

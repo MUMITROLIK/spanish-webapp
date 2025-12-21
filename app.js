@@ -1,5 +1,28 @@
 // Spanish Trainer — простой “мини-дуо” без фреймворков.
 // Если снова будет пусто — открой DevTools (F12) -> Console, там будет ошибка.
+const TG = window.Telegram?.WebApp;
+const CLOUD_KEY = "spanishTrainer_progress_v1";
+
+function cloudAvailable() {
+  return !!(TG && TG.CloudStorage && TG.CloudStorage.getItem && TG.CloudStorage.setItem);
+}
+
+function cloudGet(key) {
+  return new Promise((resolve) => {
+    TG.CloudStorage.getItem(key, (err, value) => {
+      resolve({ err, value });
+    });
+  });
+}
+
+function cloudSet(key, value) {
+  return new Promise((resolve) => {
+    TG.CloudStorage.setItem(key, value, (err, ok) => {
+      resolve({ err, ok });
+    });
+  });
+}
+
 
 (function () {
   const $ = (id) => document.getElementById(id);
@@ -269,6 +292,27 @@
     html += `</div>`;
     return html;
   }
+async function loadProgressFromCloud() {
+  if (!cloudAvailable()) return null;
+
+  const { err, value } = await cloudGet(CLOUD_KEY);
+  if (err || !value) return null;
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+async function saveProgressToCloud(progressObj) {
+  if (!cloudAvailable()) return false;
+
+  const payload = JSON.stringify(progressObj);
+  const { err, ok } = await cloudSet(CLOUD_KEY, payload);
+  return !err && !!ok;
+}
+
 
   function renderUnitTrack(unit, lvlUnlocked) {
     const nextId = computeNextLessonId();
