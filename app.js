@@ -6,6 +6,8 @@
 */
 
 const STORAGE_KEY = "spanish_trainer_state_v4";
+const BUILD = "v5"; // меняй число когда пушишь
+
 
 /** ---------- helpers ---------- */
 const $ = (id) => document.getElementById(id);
@@ -539,11 +541,15 @@ function renderHome() {
 
         const nodeRow = document.createElement("div");
         nodeRow.className = "nodeRow";
+        nodeRow.classList.add(i % 2 === 0 ? "left" : "right");
         nodeRow.style.marginLeft = `${offset}px`;
 
         const node = document.createElement("div");
         node.className = "node" + (done ? " done" : "") + (isNext ? " next" : "") + (lvlLocked ? " locked" : "");
+        node.setAttribute("role", "button");
+        node.setAttribute("aria-disabled", lvlLocked ? "true" : "false");
         node.innerHTML = `
+        
           <div class="icon">${done ? "✅" : (isNext ? "➡️" : "⚡")}</div>
           <div class="label">
             <div class="t">${lesson.title}</div>
