@@ -2,38 +2,36 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Spanish Trainer</title>
   <link rel="stylesheet" href="./styles.css" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
+
 <body>
   <div id="app"></div>
 
-  <div id="modal" class="modal hidden">
+  <!-- Modal (урок) -->
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
     <div class="modalCard">
       <div class="modalTop">
-        <div>
-          <div class="modalTitle" id="modalTitle">Урок</div>
-          <div class="modalSub" id="modalSub">0/0</div>
-        </div>
-        <button class="iconBtn" id="modalClose">✕</button>
+        <div class="modalTitle" id="modalTitle">Урок</div>
+        <button class="iconBtn" id="btnClose" aria-label="Закрыть">✕</button>
       </div>
 
-      <div id="modalBody"></div>
+      <div class="modalBody">
+        <div class="prompt" id="prompt">Вопрос…</div>
+        <div class="options" id="options"></div>
+
+        <div class="hint" id="modalHint"></div>
+      </div>
 
       <div class="modalBottom">
-        <button class="btnGhost" id="btnSkip">Пропустить</button>
-        <button class="btn" id="btnCheck">Проверить</button>
+        <button class="btn btnPrimary" id="btnCheck">Проверить</button>
       </div>
-
-      <div id="modalHint" class="hint"></div>
     </div>
   </div>
 
+  <!-- Toast -->
   <div id="toast" class="toast"></div>
 
   <script src="./app.js"></script>
