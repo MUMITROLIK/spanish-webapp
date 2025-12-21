@@ -208,8 +208,55 @@ const modalBody = el("modalBody");
 const modalOk = el("modalOk");
 const modalCancel = el("modalCancel");
 const modalX = el("modalX");
+// RESULT SHEET refs
+const resultSheet = el("resultSheet");
+const resultTitle = el("resultTitle");
+const resultSub = el("resultSub");
+const btnNext = el("btnNext");
+const confettiBox = el("confetti");
+
+let lastAnswerWasCorrect = false;
+
 
 let modalResolver = null;
+function clearConfetti(){
+  confettiBox.innerHTML = "";
+}
+
+function fireConfetti(){
+  clearConfetti();
+  const pieces = 18; // можно 30 если хочешь плотнее
+
+  for (let i = 0; i < pieces; i++) {
+    const p = document.createElement("div");
+    p.className = "confettiPiece";
+    p.style.left = Math.random() * 100 + "%";
+    p.style.transform = `translateY(0) rotate(${Math.random()*180}deg)`;
+    p.style.background = `hsl(${Math.floor(Math.random()*360)}, 90%, 60%)`;
+    p.style.animationDelay = (Math.random() * 0.10) + "s";
+    confettiBox.appendChild(p);
+  }
+
+  setTimeout(clearConfetti, 1100);
+}
+
+function showResultSheet({ ok, title, sub }) {
+  // темы
+  resultSheet.classList.toggle("good", ok);
+  resultSheet.classList.toggle("bad", !ok);
+
+  resultTitle.textContent = title;
+  resultSub.textContent = sub;
+
+  resultSheet.classList.remove("hidden");
+
+  if (ok) fireConfetti();
+}
+
+function hideResultSheet() {
+  resultSheet.classList.add("hidden");
+}
+
 
 function openModal({ title, body, okText = "Ок", cancelText = "Отмена", showCancel = true }) {
   modalTitle.textContent = title || "Сообщение";
@@ -400,14 +447,24 @@ async function checkAnswer() {
   const correctArr = currentTask.correct || currentTask.words;
   const ok = JSON.stringify(picked) === JSON.stringify(correctArr);
 
-  if (ok) {
-    progress.correctToday++;
-    progress.xpTotal += 10;
-    progress.wordsLearned += 1;
-    el("feedback").textContent = "Потрясающе! ✅";
-  } else {
-    el("feedback").textContent = "Почти! Попробуй ещё раз 🙂";
-  }
+  lastAnswerWasCorrect = ok;
+
+// блокируем повторную проверку, пока не нажмут "ДАЛЕЕ"
+el("btnCheck").disabled = true;
+
+if (ok) {
+  showResultSheet({
+    ok: true,
+    title: "Потрясающе! ✅",
+    sub: "+10 XP"
+  });
+} else {
+  showResultSheet({
+    ok: false,
+    title: "Непочтёёёт 😅",
+    sub: "Попробуй ещё раз"
+  });
+}
 
   // streak логика простая
   progress.lastActive = todayKey();
@@ -506,6 +563,23 @@ async function init() {
     if (TG) TG.close();
     else setActiveScreen("home");
   });
+  // Кнопка "ДАЛЕЕ" на экране результата
+const btnNext = el("btnNext");
+if (btnNext) {
+  btnNext.addEventListener("click", () => {
+    hideResultSheet();
+
+    if (lastAnswerWasCorrect) {
+      taskIndex++;
+      animateTaskSwap(() => renderTask()); // или renderTask(), если без анимации
+    } else {
+      // если ошибка — остаёмся на том же задании
+      el("btnCheck").disabled = picked.length === 0;
+      el("feedback").textContent = "";
+    }
+  });
+}
+
 
   setActiveScreen("home");
 }

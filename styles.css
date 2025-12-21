@@ -92,7 +92,7 @@ body{
 }
 .statIcon{ opacity:.9; }
 
-.screenHost{ padding: 14px; }
+.screenHost{ padding: 14px; padding-bottom: 120px; }
 
 .screen{
   display:none;
@@ -413,4 +413,106 @@ body{
 
 body.modalOpen{
   overflow:hidden;
+}
+/* =========================
+   DUO-LIKE RESULT SHEET
+========================= */
+.resultSheet{
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9998;
+
+  padding: 14px;
+  padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  transform: translateY(0);
+  transition: transform .22s ease, opacity .22s ease;
+
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.resultSheet.hidden{
+  transform: translateY(120%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.resultInner{
+  max-width: 860px;
+  margin: 0 auto;
+  border-radius: 20px;
+  padding: 14px 14px;
+
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 14px;
+
+  box-shadow: 0 20px 60px rgba(0,0,0,.45);
+  border: 1px solid rgba(255,255,255,.12);
+}
+
+/* ✅ зелёная / красная темы */
+.resultSheet.good .resultInner{
+  background: linear-gradient(180deg, rgba(120,255,150,1), rgba(40,210,120,1));
+  color: #062014;
+}
+.resultSheet.bad .resultInner{
+  background: linear-gradient(180deg, rgba(255,120,120,1), rgba(255,90,90,1));
+  color: #2a0a0a;
+}
+
+.resultTitle{
+  font-weight: 1000;
+  font-size: 20px;
+  line-height: 1.05;
+}
+.resultSub{
+  margin-top: 4px;
+  font-weight: 900;
+  opacity: .85;
+}
+
+.resultBtn{
+  border: 0;
+  cursor:pointer;
+  border-radius: 999px;
+  padding: 14px 18px;
+  font-weight: 1000;
+  letter-spacing: .02em;
+
+  background: rgba(255,255,255,.92);
+  color: rgba(0,0,0,.75);
+  box-shadow: 0 8px 22px rgba(0,0,0,.18);
+  -webkit-tap-highlight-color: transparent;
+}
+.resultBtn:active{ transform: scale(.99); }
+
+/* =========================
+   Confetti (лёгкое, быстрое)
+========================= */
+.confetti{
+  position:absolute;
+  inset: 0;
+  pointer-events:none;
+  overflow:hidden;
+}
+
+.confettiPiece{
+  position:absolute;
+  top: -10px;
+  width: 8px;
+  height: 10px;
+  border-radius: 3px;
+  opacity: .95;
+  animation: confettiFall .9s ease-out forwards;
+}
+
+@keyframes confettiFall{
+  to{
+    transform: translateY(120px) rotate(240deg);
+    opacity: 0;
+  }
 }
