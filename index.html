@@ -2,49 +2,44 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Spanish Trainer</title>
   <link rel="stylesheet" href="styles.css" />
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-  <div class="app">
-    <header class="topCard">
-      <div class="topLeft">
-        <div class="avatar"></div>
-        <div class="topText">
-          <div class="topTitle">Spanish Trainer</div>
-          <div class="topSub">мини-дуо режим 😉 • без лимитов</div>
-        </div>
+  <div class="wrap">
+
+    <div class="topCard">
+      <div class="avatar"></div>
+
+      <div class="topText">
+        <div class="title">Spanish Trainer</div>
+        <div class="subtitle">мини-дуо режим 😉 • без лимитов</div>
       </div>
 
-      <div class="topStats">
-        <div class="statPill">
-          <span class="ico">⚡</span>
-          <span id="xpTop">0</span>
-        </div>
-        <div class="statPill">
-          <span class="ico">🔥</span>
-          <span id="streakTop">0</span>
-        </div>
+      <div class="statsPills">
+        <div class="pill"><span>⚡</span><span id="xpTop">0</span></div>
+        <div class="pill"><span>🔥</span><span id="streakTop">0</span></div>
       </div>
-    </header>
+    </div>
 
-    <nav class="tabs" id="tabs">
+    <div class="tabs" id="tabs">
       <button class="tab active" data-tab="home">🏠 Главная</button>
       <button class="tab" data-tab="path">🧭 Путь</button>
       <button class="tab" data-tab="practice">🎯 Практика</button>
       <button class="tab" data-tab="vocab">📚 Словарь</button>
-    </nav>
+    </div>
 
-    <main id="screen" class="screen"></main>
+    <div class="screen" id="screen"></div>
   </div>
 
-  <!-- Modal -->
-  <div class="modal hidden" id="modal" role="dialog" aria-modal="true">
-    <div class="modalCard">
+  <!-- MODAL -->
+  <div class="modal hidden" id="modal">
+    <div class="modalCard" role="dialog" aria-modal="true">
       <div class="modalHead">
         <div class="modalTitle" id="modalTitle">Заголовок</div>
-        <button class="iconBtn" id="btnCloseModal" aria-label="Close">✕</button>
+        <button class="xbtn" id="btnX" aria-label="Close">✕</button>
       </div>
 
       <div class="modalBody" id="modalBody"></div>
@@ -56,7 +51,7 @@
     </div>
   </div>
 
-  <div class="toast" id="toast"></div>
+  <div class="toast hidden" id="toast"></div>
 
   <script src="app.js"></script>
 </body>
