@@ -337,6 +337,31 @@ body{
   z-index: 50;
 }
 .modal.hidden{ display:none; }
+/* универсальный hidden — на всякий */
+.hidden { 
+  display: none !important; 
+}
+
+/* базовый слой модалки */
+.modal{
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  z-index: 9999;
+
+  background: rgba(0,0,0,.45);
+  backdrop-filter: blur(8px);
+}
+
+/* твой вариант тоже ок — оставь, но усилим */
+.modal.hidden{
+  display: none !important;
+  pointer-events: none;
+}
+
 .modalCard{
   width: min(540px, 100%);
   border-radius: 22px;
@@ -403,3 +428,14 @@ body{
   transition: .18s ease;
 }
 .toast.show{ opacity: 1; bottom: 24px; }
+/* чтобы декор/фон точно не ловил клики */
+body::before,
+body::after {
+  pointer-events: none !important;
+}
+
+/* контент поверх всего */
+#app {
+  position: relative;
+  z-index: 1;
+}
