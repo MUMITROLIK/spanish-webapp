@@ -4,25 +4,20 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Spanish Trainer</title>
-
-  <!-- Telegram Mini App SDK -->
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div id="app">
-    <!-- Top profile card -->
-    <div class="profileCard">
-      <div class="profileLeft">
-        <div class="pillAvatar"></div>
-        <div class="profileText">
-          <div class="profileTitle">Spanish Trainer</div>
-          <div class="profileSub">мини-дуо режим 😉 • без лимитов</div>
+  <div class="app">
+    <header class="topCard">
+      <div class="topLeft">
+        <div class="avatar"></div>
+        <div class="topText">
+          <div class="topTitle">Spanish Trainer</div>
+          <div class="topSub">мини-дуо режим 😉 • без лимитов</div>
         </div>
       </div>
 
-      <div class="profileRight">
+      <div class="topStats">
         <div class="statPill">
           <span class="ico">⚡</span>
           <span id="xpTop">0</span>
@@ -32,45 +27,37 @@
           <span id="streakTop">0</span>
         </div>
       </div>
-    </div>
+    </header>
 
-    <!-- Tabs -->
-    <div class="tabsWrap">
-      <div class="tabs" id="tabs">
-        <button class="tab active" data-tab="home"><span class="tIco">🏠</span>Главная</button>
-        <button class="tab" data-tab="path"><span class="tIco">🧭</span>Путь</button>
-        <button class="tab" data-tab="practice"><span class="tIco">🎯</span>Практика</button>
-        <button class="tab" data-tab="vocab"><span class="tIco">📚</span>Словарь</button>
-      </div>
-    </div>
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-tab="home">🏠 Главная</button>
+      <button class="tab" data-tab="path">🧭 Путь</button>
+      <button class="tab" data-tab="practice">🎯 Практика</button>
+      <button class="tab" data-tab="vocab">📚 Словарь</button>
+    </nav>
 
-    <!-- Screens -->
-    <div id="screen"></div>
-
-    <!-- Bottom spacer for safe-area -->
-    <div class="safe"></div>
+    <main id="screen" class="screen"></main>
   </div>
 
   <!-- Modal -->
-  <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+  <div class="modal hidden" id="modal" role="dialog" aria-modal="true">
     <div class="modalCard">
       <div class="modalHead">
-        <div class="modalTitle" id="modalTitle">Урок</div>
+        <div class="modalTitle" id="modalTitle">Заголовок</div>
         <button class="iconBtn" id="btnCloseModal" aria-label="Close">✕</button>
       </div>
 
       <div class="modalBody" id="modalBody"></div>
 
-      <div class="modalBottom" id="modalBottom">
-        <button class="btn ghost" id="btnSecondary">Закрыть</button>
-        <button class="btn" id="btnPrimary">Проверить</button>
+      <div class="modalFoot">
+        <button class="btn ghost" id="btnSecondary">Отмена</button>
+        <button class="btn" id="btnPrimary">Ок</button>
       </div>
     </div>
   </div>
 
-  <!-- Toast -->
-  <div id="toast" class="toast"></div>
+  <div class="toast" id="toast"></div>
 
-  <script src="./app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

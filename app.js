@@ -1,7 +1,8 @@
 /* =========================
-   Telegram + Storage helpers
+   Telegram WebApp helpers (SAFE)
 ========================= */
-const TG = window.Telegram?.WebApp;
+const TG = window.Telegram?.WebApp || null;
+
 if (TG) {
   TG.ready();
   TG.expand();
@@ -10,29 +11,38 @@ if (TG) {
 const CLOUD_KEY = "spanishTrainer_progress_v1";
 const LS_KEY = "spanishTrainer_progress_local_v1";
 
+// Флаг: смогли ли мы ВООБЩЕ прочитать CloudStorage без ошибки
+let cloudReadable = false;
+
 function cloudAvailable() {
   return !!(TG && TG.CloudStorage && typeof TG.CloudStorage.getItem === "function");
 }
 
 function cloudGet(key) {
   return new Promise((resolve) => {
-    if (!cloudAvailable()) return resolve(null);
+    if (!cloudAvailable()) return resolve({ ok: false, value: null });
+
     TG.CloudStorage.getItem(key, (err, val) => {
-      if (err) return resolve(null);
-      resolve(val ?? null);
+      if (err) return resolve({ ok: false, value: null });
+      resolve({ ok: true, value: val ?? null });
     });
   });
 }
 
 function cloudSet(key, value) {
   return new Promise((resolve) => {
-    if (!cloudAvailable()) return resolve(false);
-    TG.CloudStorage.setItem(key, value, (err) => resolve(!err));
+    if (!cloudAvailable()) return resolve({ ok: false });
+
+    TG.CloudStorage.setItem(key, value, (err) => {
+      resolve({ ok: !err });
+    });
   });
 }
 
+/* =========================
+   Utils
+========================= */
 function todayKey(d = new Date()) {
-  // YYYY-MM-DD local
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
@@ -62,7 +72,7 @@ const COURSE = [
       { id: "A2_1", title: "Завтра/сегодня", xp: 18, q: { prompt: "Как будет «Сегодня»?", options:["Hoy","Mañana","Ayer","Siempre"], correct:0 }, words:[["hoy","сегодня"]] },
       { id: "A2_2", title: "Да/нет", xp: 18, q: { prompt: "Как будет «Да»?", options:["Sí","No","Hola","Vale"], correct:0 }, words:[["sí","да"]] },
     ],
-    lockedByUnit: "A1", // пока не пройдёшь A1 — закрыто
+    lockedByUnit: "A1",
   }
 ];
 
@@ -74,8 +84,8 @@ function makeDefaultProgress() {
     answeredToday: 0,
     correctToday: 0,
     wordsLearned: 0,
-    completed: {},         // lessonId: true
-    vocab: {},             // word: translation
+    completed: {},
+    vocab: {},
     dayKey: todayKey(),
     lastActive: todayKey(),
   };
@@ -112,11 +122,11 @@ function showToast(text) {
   toast.textContent = text;
   toast.classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove("show"), 1800);
+  toastTimer = setTimeout(() => toast.classList.remove("show"), 1700);
 }
 
 /* =========================
-   Modal helpers
+   Modal
 ========================= */
 function openModal(title, bodyHtml, primaryText = "Ок", secondaryText = "Закрыть") {
   modalTitle.textContent = title;
@@ -135,12 +145,10 @@ function closeModal() {
 
 btnCloseModal.onclick = closeModal;
 btnSecondary.onclick = closeModal;
-modal.addEventListener("click", (e) => {
-  if (e.target === modal) closeModal();
-});
+modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
 
 /* =========================
-   Progress: reset day + streak
+   Day reset + streak
 ========================= */
 function ensureDay() {
   const dk = todayKey();
@@ -149,31 +157,24 @@ function ensureDay() {
     progress.answeredToday = 0;
     progress.correctToday = 0;
   }
-
-  // streak logic (simple):
-  // if lastActive was yesterday -> streak continues when you do something today
-  // if gap > 1 day -> streak resets when you do something today
 }
 
 function bumpActivity() {
-  const now = new Date();
-  const dk = todayKey(now);
+  const dk = todayKey();
   const last = progress.lastActive;
 
-  // compute day diff
   const a = new Date(dk + "T00:00:00");
   const b = new Date(last + "T00:00:00");
   const diffDays = Math.round((a - b) / (1000 * 60 * 60 * 24));
 
-  if (diffDays > 1) progress.streak = 0; // пропуск
-  // streak increase only once per day: when first time today you do action
+  if (diffDays > 1) progress.streak = 0;
   if (diffDays >= 1) progress.streak += 1;
 
   progress.lastActive = dk;
 }
 
 /* =========================
-   Save/Load (Cloud + Local)
+   Save/Load (SAFE)
 ========================= */
 function serializeProgress(obj) {
   return JSON.stringify(obj);
@@ -182,32 +183,50 @@ function serializeProgress(obj) {
 function parseProgress(str) {
   const obj = JSON.parse(str);
   if (!obj || typeof obj !== "object") return null;
-  if (!("xpTotal" in obj) || !("completed" in obj)) return null;
+  if (typeof obj.xpTotal !== "number") return null;
+  if (!obj.completed || typeof obj.completed !== "object") return null;
+  if (!obj.vocab || typeof obj.vocab !== "object") obj.vocab = {};
+  if (typeof obj.wordsLearned !== "number") obj.wordsLearned = Object.keys(obj.vocab).length;
+  if (!obj.dayKey) obj.dayKey = todayKey();
+  if (!obj.lastActive) obj.lastActive = todayKey();
   return obj;
 }
 
+// ВАЖНО: на старте НЕ пишем в облако, если мы его не смогли прочитать
 async function loadProgress() {
-  // 1) try cloud
-  const cloud = await cloudGet(CLOUD_KEY);
-  if (cloud) {
-    const p = parseProgress(cloud);
+  // 1) Cloud
+  const c = await cloudGet(CLOUD_KEY);
+  if (c.ok) cloudReadable = true;
+
+  if (c.ok && c.value) {
+    const p = parseProgress(c.value);
     if (p) return p;
   }
 
-  // 2) localStorage fallback
+  // 2) LocalStorage
   const ls = localStorage.getItem(LS_KEY);
   if (ls) {
     const p = parseProgress(ls);
     if (p) return p;
   }
 
+  // 3) Default
   return makeDefaultProgress();
 }
 
-async function saveProgress() {
+async function saveProgress({ forceCloud = false } = {}) {
   const str = serializeProgress(progress);
+
+  // local всегда
   localStorage.setItem(LS_KEY, str);
-  await cloudSet(CLOUD_KEY, str);
+
+  // cloud только если:
+  // - cloudReadable === true (мы смогли прочитать облако без ошибки)
+  //   или forceCloud (пользователь явно захотел синк)
+  if ((cloudReadable || forceCloud) && cloudAvailable()) {
+    const res = await cloudSet(CLOUD_KEY, str);
+    if (res.ok) cloudReadable = true;
+  }
 }
 
 /* =========================
@@ -215,7 +234,6 @@ async function saveProgress() {
 ========================= */
 function isUnitLocked(unit) {
   if (!unit.lockedByUnit) return false;
-  // unit locked if required unit not fully completed
   const req = COURSE.find(u => u.id === unit.lockedByUnit);
   if (!req) return false;
   return !req.lessons.every(lsn => progress.completed[lsn.id]);
@@ -228,7 +246,7 @@ function nextLessonId() {
       if (!progress.completed[l.id]) return l.id;
     }
   }
-  return null; // all done
+  return null;
 }
 
 function findLesson(lessonId) {
@@ -245,18 +263,8 @@ function findLesson(lessonId) {
 ========================= */
 function updateTopStats() {
   ensureDay();
-
   xpTop.textContent = String(progress.xpTotal || 0);
   streakTop.textContent = String(progress.streak || 0);
-}
-
-function render() {
-  updateTopStats();
-  renderTabs();
-  if (currentTab === "home") renderHome();
-  if (currentTab === "path") renderPath();
-  if (currentTab === "practice") renderPractice();
-  if (currentTab === "vocab") renderVocab();
 }
 
 function renderTabs() {
@@ -266,11 +274,9 @@ function renderTabs() {
 }
 
 function screenWrap(innerHtml) {
-  screen.className = "screen";
   screen.innerHTML = innerHtml;
 }
 
-/* -------- Home -------- */
 function calcAccuracy() {
   if (!progress.answeredToday) return 0;
   return Math.round((progress.correctToday / progress.answeredToday) * 100);
@@ -278,15 +284,14 @@ function calcAccuracy() {
 
 function renderHome() {
   ensureDay();
+
   const acc = calcAccuracy();
   const goal = 50;
-  const xpToday = progress.xpTotalTodayCached ?? 0; // we compute below properly
-  // We'll compute xpToday as: sum xp of lessons done today isn't tracked; keep simple: show answeredToday*10 as "xpToday"
   const xpTodayApprox = progress.answeredToday * 10;
   const barPct = clamp(Math.round((xpTodayApprox / goal) * 100), 0, 100);
 
   const nextId = nextLessonId();
-  const nextTitle = nextId ? findLesson(nextId)?.lesson?.title : "всё пройдено 🎉";
+  const nextTitle = nextId ? (findLesson(nextId)?.lesson?.title || "урок") : "всё пройдено 🎉";
 
   screenWrap(`
     <div class="card hero">
@@ -296,6 +301,7 @@ function renderHome() {
       <div class="heroActions">
         <button class="btn" id="btnContinue">Продолжить</button>
         <button class="btn ghost" id="btnSyncBot">Синк в бота</button>
+        <button class="btn ghost" id="btnSyncCloud">Синк в облако</button>
         <button class="btn ghost" id="btnExport">Экспорт</button>
         <button class="btn ghost" id="btnImport">Импорт</button>
       </div>
@@ -338,29 +344,27 @@ function renderHome() {
       <div class="hint">модули → уроки → задания</div>
     </div>
 
-    <div id="homePathPreview"></div>
+    <div class="card pathCard" id="homePreview"></div>
   `);
 
-  // bind actions
+  // preview A1
+  document.getElementById("homePreview").innerHTML = renderPathCardHtml(true);
+
   document.getElementById("btnContinue").onclick = () => {
     currentTab = "path";
     render();
-    setTimeout(() => {
-      const next = document.querySelector('[data-lesson-next="1"]');
-      if (next) next.scrollIntoView({ behavior:"smooth", block:"center" });
-    }, 50);
   };
 
   document.getElementById("btnSyncBot").onclick = syncToBot;
+  document.getElementById("btnSyncCloud").onclick = async () => {
+    await saveProgress({ forceCloud: true });
+    showToast("Сохранено в облако ✅");
+  };
+
   document.getElementById("btnExport").onclick = showExport;
   document.getElementById("btnImport").onclick = showImport;
-
-  // render preview of first unit
-  const preview = document.getElementById("homePathPreview");
-  preview.innerHTML = renderPathCardHtml(true);
 }
 
-/* -------- Path -------- */
 function renderPathCardHtml(previewOnly = false) {
   let html = "";
 
@@ -369,24 +373,23 @@ function renderPathCardHtml(previewOnly = false) {
     const doneCount = unit.lessons.filter(l => progress.completed[l.id]).length;
 
     html += `
-      <div class="card pathCard" style="margin-top:${previewOnly ? 0 : 0}px;">
-        <div class="unitHead">
-          <div>
-            <div class="unitTitle">${unit.title}</div>
-            <div class="unitSub">${doneCount} / ${unit.lessons.length} пройдено</div>
-          </div>
-          <div class="unitBadge">${locked ? "закрыто" : "открыто"}</div>
+      <div class="unitHead">
+        <div>
+          <div class="unitTitle">${unit.title}</div>
+          <div class="unitSub">${doneCount} / ${unit.lessons.length} пройдено</div>
         </div>
+        <div class="unitBadge">${locked ? "закрыто" : "открыто"}</div>
+      </div>
 
-        ${locked ? `<div class="lockText">закрыто пока ${unit.lockedByUnit} не пройден</div>` : ""}
+      ${locked ? `<div class="lockText">закрыто пока ${unit.lockedByUnit} не пройден</div>` : ""}
 
-        <div class="nodeList">
-          ${unit.lessons.map(l => renderNodeRow(unit, l, locked)).join("")}
-        </div>
+      <div class="nodeList">
+        ${unit.lessons.map(l => renderNodeRow(unit, l, locked)).join("")}
       </div>
     `;
 
     if (previewOnly) break;
+    html += `<div style="height:14px;"></div>`;
   }
 
   return html;
@@ -397,53 +400,48 @@ function renderNodeRow(unit, lesson, unitLocked) {
   const next = (!unitLocked && !done && lesson.id === nextLessonId());
   const locked = unitLocked;
 
-  const iconClass = locked ? "lock" : (done ? "done" : (next ? "next" : ""));
   const icon = locked ? "🔒" : (done ? "✅" : (next ? "➡️" : "⚡"));
-
   const sub = done ? "пройдено" : (next ? "следующий" : "доступно");
-  const pillAttrs = locked ? "" : `data-lesson="${lesson.id}" ${next ? 'data-lesson-next="1"' : ""}`;
+
+  const attrs = locked ? "" : `data-lesson="${lesson.id}"`;
 
   return `
     <div class="nodeRow">
-      <div class="nodeIcon ${iconClass}">${icon}</div>
-      <div class="nodePill" ${pillAttrs}>
-        <div class="nodeMain">
-          <div class="nodeTitle">${lesson.title}</div>
-          <div class="nodeSub">${lesson.xp} XP • ${sub}</div>
-        </div>
-        ${locked ? `<div class="lockText">закрыто</div>` : `<div class="lockText">играть</div>`}
+      <div class="nodeIcon">${icon}</div>
+      <div class="nodePill" ${attrs}>
+        <div class="nodeTitle">${lesson.title}</div>
+        <div class="nodeSub">${lesson.xp} XP • ${sub}</div>
       </div>
     </div>
   `;
 }
 
 function renderPath() {
-  screenWrap(renderPathCardHtml(false));
+  screenWrap(`
+    <div class="card pathCard">
+      ${renderPathCardHtml(false)}
+    </div>
+  `);
 
-  // bind lesson clicks
   document.querySelectorAll("[data-lesson]").forEach(el => {
-    el.onclick = () => {
-      const lessonId = el.getAttribute("data-lesson");
-      startLesson(lessonId);
-    };
+    el.onclick = () => startLesson(el.getAttribute("data-lesson"));
   });
 }
 
-/* -------- Practice -------- */
 function renderPractice() {
   const nextId = nextLessonId();
   const next = nextId ? findLesson(nextId)?.lesson : null;
 
   screenWrap(`
-    <div class="card practiceCard">
+    <div class="card">
       <div style="font-size:24px; font-weight:1000;">Практика</div>
-      <div style="color:var(--muted); font-weight:900;">быстро набиваем XP</div>
+      <div class="muted">быстро набиваем XP</div>
 
       <div class="list">
         <div class="item">
           <div>
             <div style="font-weight:1000;">Случайный урок</div>
-            <div style="color:var(--muted); font-weight:900;">рандом из доступных</div>
+            <div class="muted">рандом из доступных</div>
           </div>
           <button class="btn ghost small" id="btnRandom">Старт</button>
         </div>
@@ -451,20 +449,28 @@ function renderPractice() {
         <div class="item">
           <div>
             <div style="font-weight:1000;">Следующий урок</div>
-            <div style="color:var(--muted); font-weight:900;">${next ? next.title : "всё пройдено 🎉"}</div>
+            <div class="muted">${next ? next.title : "всё пройдено 🎉"}</div>
           </div>
           <button class="btn small" id="btnNext">${next ? "Поехали" : "Ок"}</button>
         </div>
 
         <div class="item">
           <div>
-            <div style="font-weight:1000;">Экспорт/Импорт</div>
-            <div style="color:var(--muted); font-weight:900;">перенос прогресса строкой</div>
+            <div style="font-weight:1000;">Перенос</div>
+            <div class="muted">экспорт/импорт строкой</div>
           </div>
           <div style="display:flex; gap:10px;">
             <button class="btn ghost small" id="btnExport2">Экспорт</button>
             <button class="btn ghost small" id="btnImport2">Импорт</button>
           </div>
+        </div>
+
+        <div class="item">
+          <div>
+            <div style="font-weight:1000;">Облако</div>
+            <div class="muted">синк между устройствами</div>
+          </div>
+          <button class="btn ghost small" id="btnSyncCloud2">Синк</button>
         </div>
       </div>
     </div>
@@ -474,13 +480,10 @@ function renderPractice() {
     const available = [];
     for (const unit of COURSE) {
       if (isUnitLocked(unit)) continue;
-      for (const l of unit.lessons) {
-        if (!progress.completed[l.id]) available.push(l.id);
-      }
+      for (const l of unit.lessons) if (!progress.completed[l.id]) available.push(l.id);
     }
     if (!available.length) return showToast("Всё уже пройдено 🎉");
-    const rnd = available[Math.floor(Math.random() * available.length)];
-    startLesson(rnd);
+    startLesson(available[Math.floor(Math.random() * available.length)]);
   };
 
   document.getElementById("btnNext").onclick = () => {
@@ -490,47 +493,82 @@ function renderPractice() {
 
   document.getElementById("btnExport2").onclick = showExport;
   document.getElementById("btnImport2").onclick = showImport;
+
+  document.getElementById("btnSyncCloud2").onclick = async () => {
+    await saveProgress({ forceCloud: true });
+    showToast("Сохранено в облако ✅");
+  };
 }
 
-/* -------- Vocab -------- */
 function renderVocab() {
   const entries = Object.entries(progress.vocab || {});
   const body = entries.length
-    ? entries.map(([w, t]) => `<div class="item"><div style="font-weight:1000;">${w}</div><div class="muted">${t}</div></div>`).join("")
-    : `<div class="item"><div style="font-weight:1000;">Пока пусто</div><div class="muted">пройди 1 урок</div></div>`;
+    ? entries.map(([w, t]) => `
+        <div class="item">
+          <div style="min-width:0;">
+            <div style="font-weight:1000;">${w}</div>
+            <div class="muted">${t}</div>
+          </div>
+        </div>
+      `).join("")
+    : `
+        <div class="item">
+          <div style="min-width:0;">
+            <div style="font-weight:1000;">Пока пусто</div>
+            <div class="muted">пройди 1 урок</div>
+          </div>
+        </div>
+      `;
 
   screenWrap(`
-    <div class="card vocabCard">
+    <div class="card">
       <div style="font-size:24px; font-weight:1000;">Словарь</div>
-      <div style="color:var(--muted); font-weight:900;">то, что ты уже закрепил</div>
+      <div class="muted">то, что ты уже закрепил</div>
 
       <div class="list">${body}</div>
 
       <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
         <button class="btn ghost" id="btnReset">Сбросить прогресс</button>
         <button class="btn ghost" id="btnSyncBot2">Синк в бота</button>
+        <button class="btn ghost" id="btnSyncCloud3">Синк в облако</button>
       </div>
     </div>
   `);
 
-  document.getElementById("btnReset").onclick = async () => {
+  document.getElementById("btnReset").onclick = () => {
     openModal(
       "Сброс",
-      `<div class="qTitle">Точно сбросить прогресс?</div><div style="color:var(--muted); font-weight:900;">Это удалит XP, стрик и пройденные уроки.</div>`,
+      `<div class="qTitle">Точно сбросить прогресс?</div>
+       <div class="muted">Это удалит XP, стрик и пройденные уроки.</div>`,
       "Да, сбросить",
       "Отмена"
     );
+
     btnPrimary.onclick = async () => {
       progress = makeDefaultProgress();
-      await saveProgress();
+      await saveProgress({ forceCloud: true }); // сброс осознанно синкаем
       closeModal();
       showToast("Сброшено ✅");
       render();
     };
+
     btnSecondary.onclick = closeModal;
   };
 
   document.getElementById("btnSyncBot2").onclick = syncToBot;
+  document.getElementById("btnSyncCloud3").onclick = async () => {
+    await saveProgress({ forceCloud: true });
+    showToast("Сохранено в облако ✅");
+  };
+}
+
+function render() {
+  updateTopStats();
+  renderTabs();
+  if (currentTab === "home") renderHome();
+  if (currentTab === "path") renderPath();
+  if (currentTab === "practice") renderPractice();
+  if (currentTab === "vocab") renderVocab();
 }
 
 /* =========================
@@ -550,7 +588,7 @@ function startLesson(lessonId) {
       <div class="opts">
         ${lesson.q.options.map((t, i) => `<button class="opt" data-opt="${i}">${t}</button>`).join("")}
       </div>
-      <div style="margin-top:10px; color:var(--muted); font-weight:900;">Награда: ${lesson.xp} XP</div>
+      <div class="muted" style="margin-top:10px;">Награда: ${lesson.xp} XP</div>
     `,
     "Проверить",
     "Закрыть"
@@ -580,18 +618,14 @@ function startLesson(lessonId) {
       return;
     }
 
-    // correct
     if (TG?.HapticFeedback) TG.HapticFeedback.notificationOccurred("success");
 
-    // streak + activity (once per day)
     bumpActivity();
 
-    // award xp + mark lesson done
     if (!progress.completed[lesson.id]) {
       progress.xpTotal += lesson.xp;
       progress.completed[lesson.id] = true;
 
-      // vocab
       if (lesson.words && Array.isArray(lesson.words)) {
         for (const [w, t] of lesson.words) {
           if (!progress.vocab[w]) {
@@ -600,12 +634,9 @@ function startLesson(lessonId) {
           }
         }
       }
-    } else {
-      // повтор — можно дать чуть xp, но чтобы не фармить бесконечно оставим 0
     }
 
-    await saveProgress();
-
+    await saveProgress(); // обычное сохранение (в облако только если оно читается)
     closeModal();
     showToast(`+${lesson.xp} XP ✅`);
     render();
@@ -623,13 +654,14 @@ function showExport() {
   openModal(
     "Экспорт прогресса",
     `
-      <div style="color:var(--muted); font-weight:900; margin-bottom:10px;">
+      <div class="muted" style="margin-bottom:10px;">
         Скопируй строку и вставь на другом устройстве в “Импорт”.
       </div>
       <textarea class="textarea" id="exportBox" readonly></textarea>
       <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;">
         <button class="btn ghost" id="btnCopy">Копировать</button>
         <button class="btn ghost" id="btnSendBot">Синк в бота</button>
+        <button class="btn ghost" id="btnSaveCloud">Синк в облако</button>
       </div>
     `,
     "Закрыть",
@@ -651,8 +683,11 @@ function showExport() {
   };
 
   document.getElementById("btnSendBot").onclick = () => syncToBot();
+  document.getElementById("btnSaveCloud").onclick = async () => {
+    await saveProgress({ forceCloud: true });
+    showToast("Сохранено в облако ✅");
+  };
 
-  // primary just closes
   btnPrimary.onclick = closeModal;
   btnSecondary.onclick = closeModal;
 }
@@ -661,7 +696,7 @@ function showImport() {
   openModal(
     "Импорт прогресса",
     `
-      <div style="color:var(--muted); font-weight:900; margin-bottom:10px;">
+      <div class="muted" style="margin-bottom:10px;">
         Вставь строку (JSON) из “Экспорт”.
       </div>
       <textarea class="textarea" id="importBox" placeholder="Вставь сюда..."></textarea>
@@ -676,11 +711,12 @@ function showImport() {
 
     let p = null;
     try { p = parseProgress(raw); } catch { p = null; }
-
     if (!p) return showToast("Не похоже на прогресс 😅");
 
     progress = p;
-    await saveProgress();
+    // импорт — это осознанное действие, можно синкнуть в облако
+    await saveProgress({ forceCloud: true });
+
     closeModal();
     showToast("Импортировано ✅");
     render();
@@ -695,7 +731,6 @@ function showImport() {
 function syncToBot() {
   const data = serializeProgress(progress);
 
-  // 1) Telegram sendData → улетит боту (бот сможет сохранить)
   if (TG && typeof TG.sendData === "function") {
     TG.sendData(data);
     showToast("Отправил в бота ✅");
@@ -705,23 +740,26 @@ function syncToBot() {
 }
 
 /* =========================
-   Tabs behavior
+   Tabs
 ========================= */
 tabs.addEventListener("click", (e) => {
   const btn = e.target.closest(".tab");
   if (!btn) return;
-  currentTab = btn.dataset.tab;
 
+  currentTab = btn.dataset.tab;
   if (TG?.HapticFeedback) TG.HapticFeedback.selectionChanged();
   render();
 });
 
 /* =========================
-   Init
+   Init (SAFE: no auto cloud overwrite)
 ========================= */
 (async function init() {
   progress = await loadProgress();
   ensureDay();
-  await saveProgress(); // чтобы сразу зафиксировалось в cloud/local
+
+  // ВАЖНО: тут НЕ делаем saveProgress() сразу, чтобы не стереть облако дефолтом
+  // Сохранять будем только при изменениях / синке / импорте
+
   render();
 })();
