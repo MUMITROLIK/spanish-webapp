@@ -1,62 +1,21 @@
-/* Duolingo-like Spanish Trainer (WebApp)
-   - Home path UI (left/center/right)
-   - Lessons: MCQ / Tiles / Input
-   - Saves progress in localStorage
-   - Sends stats to Telegram bot via WebApp.sendData()
+/* Spanish Trainer – mini-duo style
+   - no hearts / limits
+   - 3 task types: mcq / tiles / input
+   - progress saved in localStorage
+   - sends stats to Telegram bot via WebApp.sendData (optional)
 */
 
-"use strict";
+const STORAGE_KEY = "spanish_trainer_state_v4";
 
-/* ===========================
-   Telegram WebApp integration
-=========================== */
-const TG = window.Telegram?.WebApp || null;
+/** ---------- helpers ---------- */
+const $ = (id) => document.getElementById(id);
 
-function sendToBot(payload) {
-  try {
-    if (!TG) return;
-    const data = JSON.stringify(payload);
-    TG.sendData(data);
-  } catch (e) {
-    // ignore
-  }
-}
-
-function getUserTag() {
-  // Telegram mini app: we can’t directly read user id in JS securely without initData parsing.
-  // We keep it "unknown" but bot still receives sendData event when user does actions.
-  return "webapp";
-}
-
-/* ===========================
-   Helpers
-=========================== */
-function $(id) {
-  return document.getElementById(id);
-}
-
-function clamp(n, a, b) {
-  return Math.max(a, Math.min(b, n));
-}
-
-function dayKey(date = new Date()) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-function shuffle(arr) {
-  const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-function uniq(arr) {
-  return [...new Set(arr)];
+function todayISO() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function normalizeAnswer(s) {
@@ -66,152 +25,260 @@ function normalizeAnswer(s) {
     .replace(/\s+/g, " ");
 }
 
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 function showToast(text) {
   const el = $("toast");
-  if (!el) {
-    console.log("TOAST:", text);
-    return;
-  }
+  if (!el) return;
   el.textContent = text;
   el.classList.add("toast--show");
   clearTimeout(showToast._t);
-  showToast._t = setTimeout(() => el.classList.remove("toast--show"), 1600);
+  showToast._t = setTimeout(() => el.classList.remove("toast--show"), 1400);
 }
 
-/* ===========================
-   Course content
-=========================== */
+function getWeekKey(d = new Date()) {
+  // ISO-ish week key: YYYY-W##
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
+}
 
-// Мини-курс. Можешь расширять как хочешь.
+function isTelegramWebApp() {
+  return typeof window.Telegram !== "undefined" && window.Telegram.WebApp;
+}
+
+function tgUserId() {
+  try {
+    if (!isTelegramWebApp()) return null;
+    return window.Telegram.WebApp.initDataUnsafe?.user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** ---------- course content ---------- */
 const COURSE = {
   title: "Spanish Trainer",
-  units: [
+  levels: [
     {
-      id: "u1",
-      title: "Приветствия",
-      level: "A1",
-      lessons: [
+      id: "A1",
+      title: "A1 • База",
+      locked: false,
+      units: [
         {
-          id: "l1",
-          title: "Базовые слова",
-          xp: 10,
-          pairs: [
-            { ru: "привет", es: "hola" },
-            { ru: "пока", es: "adiós" },
-            { ru: "спасибо", es: "gracias" },
-            { ru: "пожалуйста", es: "por favor" },
-            { ru: "да", es: "sí" },
-            { ru: "нет", es: "no" }
-          ]
+          id: "u1",
+          title: "Приветствия",
+          lessons: [
+            {
+              id: "l1",
+              title: "Базовые слова",
+              xp: 10,
+              tasks: [
+                {
+                  type: "mcq",
+                  q: "Переведи на ES: «спасибо»",
+                  a: "gracias",
+                  options: ["hola", "gracias", "por favor", "adiós"],
+                  vocab: ["gracias"]
+                },
+                {
+                  type: "tiles",
+                  q: "Собери фразу: «Пожалуйста»",
+                  a: "por favor",
+                  tiles: ["por", "favor", "gracias", "hola"],
+                  vocab: ["por", "favor"]
+                },
+                {
+                  type: "input",
+                  q: "Напиши по-испански: «привет»",
+                  a: "hola",
+                  placeholder: "введи ответ…",
+                  vocab: ["hola"]
+                },
+              ],
+            },
+            {
+              id: "l2",
+              title: "Прощание",
+              xp: 12,
+              tasks: [
+                {
+                  type: "mcq",
+                  q: "Переведи на ES: «пока»",
+                  a: "adiós",
+                  options: ["adiós", "gracias", "buenos días", "hola"],
+                  vocab: ["adiós"]
+                },
+                {
+                  type: "input",
+                  q: "Напиши по-испански: «доброе утро»",
+                  a: "buenos días",
+                  placeholder: "введи ответ…",
+                  vocab: ["buenos", "días"]
+                },
+              ],
+            },
+          ],
         },
         {
-          id: "l2",
+          id: "u2",
           title: "Вежливость",
-          xp: 12,
-          pairs: [
-            { ru: "доброе утро", es: "buenos días" },
-            { ru: "добрый день", es: "buenas tardes" },
-            { ru: "добрый вечер", es: "buenas noches" },
-            { ru: "извини", es: "perdón" },
-            { ru: "как дела?", es: "¿cómo estás?" },
-            { ru: "хорошо", es: "bien" }
-          ]
-        }
-      ]
+          lessons: [
+            {
+              id: "l3",
+              title: "Вежливые фразы",
+              xp: 14,
+              tasks: [
+                {
+                  type: "tiles",
+                  q: "Собери фразу: «Извините»",
+                  a: "perdón",
+                  tiles: ["perdón", "hola", "por", "favor"],
+                  vocab: ["perdón"]
+                },
+                {
+                  type: "mcq",
+                  q: "Переведи на ES: «пожалуйста»",
+                  a: "por favor",
+                  options: ["por favor", "adiós", "gracias", "buenas noches"],
+                  vocab: ["por", "favor"]
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: "u3",
+          title: "Кафе",
+          lessons: [
+            {
+              id: "l4",
+              title: "Заказ",
+              xp: 16,
+              tasks: [
+                {
+                  type: "mcq",
+                  q: "Переведи на ES: «кофе»",
+                  a: "café",
+                  options: ["café", "agua", "pan", "leche"],
+                  vocab: ["café"]
+                },
+                {
+                  type: "tiles",
+                  q: "Собери фразу: «Один кофе, пожалуйста»",
+                  a: "un café por favor",
+                  tiles: ["un", "café", "por", "favor", "gracias"],
+                  vocab: ["un", "café", "por", "favor"]
+                },
+              ],
+            },
+          ],
+        },
+      ],
     },
     {
-      id: "u2",
-      title: "Кафе",
-      level: "A1",
-      lessons: [
+      id: "A2",
+      title: "A2 • Дальше",
+      locked: true,
+      lockText: "закрыто пока A1 не пройден",
+      units: [
         {
-          id: "l3",
-          title: "Заказ",
-          xp: 14,
-          pairs: [
-            { ru: "кофе", es: "café" },
-            { ru: "вода", es: "agua" },
-            { ru: "чай", es: "té" },
-            { ru: "счёт", es: "la cuenta" },
-            { ru: "я хочу", es: "quiero" },
-            { ru: "можно?", es: "¿puedo?" }
-          ]
-        }
-      ]
-    },
-    {
-      id: "u3",
-      title: "A2 (закрыто пока A1 не пройден)",
-      level: "A2",
-      lessons: [
-        {
-          id: "l4",
+          id: "u4",
           title: "Планы",
-          xp: 18,
-          pairs: [
-            { ru: "сегодня", es: "hoy" },
-            { ru: "завтра", es: "mañana" },
-            { ru: "вчера", es: "ayer" },
-            { ru: "я иду", es: "voy" },
-            { ru: "мы идём", es: "vamos" },
-            { ru: "потому что", es: "porque" }
-          ]
-        }
-      ]
-    }
-  ]
+          lessons: [
+            {
+              id: "l5",
+              title: "Завтра/сегодня",
+              xp: 18,
+              tasks: [
+                {
+                  type: "mcq",
+                  q: "Переведи на ES: «завтра»",
+                  a: "mañana",
+                  options: ["mañana", "hoy", "ayer", "siempre"],
+                  vocab: ["mañana"]
+                },
+                {
+                  type: "input",
+                  q: "Напиши по-испански: «сегодня»",
+                  a: "hoy",
+                  placeholder: "введи ответ…",
+                  vocab: ["hoy"]
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  ],
 };
 
-function getAllPairs() {
-  return COURSE.units.flatMap((u) => u.lessons.flatMap((l) => l.pairs));
-}
+/** ---------- state ---------- */
+const defaultState = () => ({
+  userId: tgUserId(),
+  xpTotal: 0,
+  streak: 0,
+  lastActiveDate: null,
 
-function findLessonById(id) {
-  for (const u of COURSE.units) {
-    for (const l of u.lessons) {
-      if (l.id === id) return { unit: u, lesson: l };
-    }
-  }
-  return null;
-}
+  // daily
+  day: todayISO(),
+  dayGoal: 50,
+  dayXp: 0,
+  dayAnswers: 0,
+  dayCorrect: 0,
 
-/* ===========================
-   State (localStorage)
-=========================== */
-const STORAGE_KEY = "spanish_trainer_state_v3";
+  // weekly
+  weekKey: getWeekKey(),
+  weekXp: 0,
 
-function defaultState() {
-  return {
-    xp: 0,
-    streak: 1,
+  // progress
+  completed: {}, // lessonId -> true
 
-    // day tracking
-    day: dayKey(),
-    todayXp: 0,
-    todayAnswers: 0,
-    todayCorrect: 0,
-    dailyGoal: 50,
+  // vocab: word -> {seen, correct, last}
+  vocab: {},
 
-    // progress
-    completed: {}, // lessonId -> true
-    xpByDay: {}, // day -> xp earned
+  // ui
+  tab: "home",
+});
 
-    // vocab stats
-    vocab: {
-      // es -> { seen, correct }
-    },
-
-    // daily quests
-    dailyQuests: { day: null, done: {} }
-  };
-}
+let state = loadState();
 
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return defaultState();
-    const parsed = JSON.parse(raw);
-    return { ...defaultState(), ...parsed };
+    const s = JSON.parse(raw);
+
+    // sync dates / reset daily+weekly if needed
+    const t = todayISO();
+    if (s.day !== t) {
+      s.day = t;
+      s.dayXp = 0;
+      s.dayAnswers = 0;
+      s.dayCorrect = 0;
+    }
+
+    const wk = getWeekKey();
+    if (s.weekKey !== wk) {
+      s.weekKey = wk;
+      s.weekXp = 0;
+    }
+
+    // keep userId if telegram
+    s.userId = tgUserId() ?? s.userId ?? null;
+
+    return { ...defaultState(), ...s };
   } catch {
     return defaultState();
   }
@@ -221,890 +288,926 @@ function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-let state = loadState();
+/** ---------- streak & activity ---------- */
+function touchActivity() {
+  const t = todayISO();
+  const last = state.lastActiveDate;
 
-function resetIfNewDay() {
-  const today = dayKey();
-  if (state.day !== today) {
-    // streak: если вчера тоже был xp > 0, оставим, иначе сбросим на 1
-    // (упрощённо)
-    state.streak = (state.todayXp > 0 ? state.streak + 1 : 1);
-
-    state.day = today;
-    state.todayXp = 0;
-    state.todayAnswers = 0;
-    state.todayCorrect = 0;
-
-    // daily quests reset
-    state.dailyQuests.day = today;
-    state.dailyQuests.done = {};
-
-    saveState();
+  if (last === t) {
+    // same day, no change
   } else {
-    // ensure quests initialized
-    if (state.dailyQuests.day !== today) {
-      state.dailyQuests.day = today;
-      state.dailyQuests.done = {};
-      saveState();
+    // diff days -> update streak
+    const prev = last ? new Date(last) : null;
+    const now = new Date(t);
+    if (!prev) {
+      state.streak = 1;
+    } else {
+      const diffDays = Math.round((now - prev) / 86400000);
+      if (diffDays === 1) state.streak = Math.max(1, state.streak + 1);
+      else state.streak = 1;
     }
+    state.lastActiveDate = t;
   }
+
+  saveState();
 }
 
-resetIfNewDay();
+/** ---------- telegram sync ---------- */
+function tgReady() {
+  if (!isTelegramWebApp()) return;
+  const tg = window.Telegram.WebApp;
+  tg.ready();
+  tg.expand();
+}
 
-/* ===========================
-   UI references (optional)
-=========================== */
-const ui = {
-  // top stats (optional ids)
-  xp: $("xpVal"),
-  streak: $("streakVal"),
-  goalBar: $("goalBar"),
-  goalText: $("goalText"),
-  todayAnswers: $("todayAnswers"),
-  accuracy: $("accuracy"),
+function tgSendStats(reason = "progress") {
+  if (!isTelegramWebApp()) return;
+  const tg = window.Telegram.WebApp;
 
-  // views
-  homeView: $("homeView"),
-  lessonView: $("lessonView"),
-  vocabView: $("vocabView"),
-  trainView: $("trainView"),
-  profileView: $("profileView"),
+  const payload = {
+    type: "stats",
+    reason,
+    userId: state.userId,
+    day: state.day,
+    dayXp: state.dayXp,
+    dayAnswers: state.dayAnswers,
+    dayCorrect: state.dayCorrect,
+    weekKey: state.weekKey,
+    weekXp: state.weekXp,
+    xpTotal: state.xpTotal,
+    streak: state.streak,
+    learnedWords: Object.keys(state.vocab).length,
+  };
 
-  // home
-  units: $("units"),
+  // sendData has size limit; payload is small
+  tg.sendData(JSON.stringify(payload));
+}
 
-  // lesson
-  lessonTitle: $("lessonTitle"),
-  prompt: $("prompt"),
-  options: $("options"),
-  tilesArea: $("tilesArea"),
-  tilesPicked: $("tilesPicked"),
-  input: $("answerInput"),
-  checkBtn: $("checkBtn"),
-  nextBtn: $("nextBtn"),
-  backBtn: $("backBtn"),
+/** ---------- UI rendering ---------- */
+function setTab(tab) {
+  state.tab = tab;
+  saveState();
+  render();
+}
 
-  // vocab
-  vocabList: $("vocabList")
-};
+function courseDoneA1() {
+  const a1 = COURSE.levels.find(l => l.id === "A1");
+  if (!a1) return false;
+  const allLessons = a1.units.flatMap(u => u.lessons);
+  return allLessons.every(ls => state.completed[ls.id]);
+}
 
-// If your HTML doesn’t have these IDs, app will still run,
-// because we generate minimal UI if missing.
-function ensureBasicLayout() {
-  if ($("appRoot")) return;
+function computeNextLessonId() {
+  // next = first uncompleted lesson in unlocked levels (A2 locked until A1 done)
+  for (const lvl of COURSE.levels) {
+    const locked = lvl.locked && !courseDoneA1();
+    if (locked) continue;
+    for (const unit of lvl.units) {
+      for (const lesson of unit.lessons) {
+        if (!state.completed[lesson.id]) return lesson.id;
+      }
+    }
+  }
+  return null;
+}
 
-  // minimal shell
-  const root = document.createElement("div");
-  root.id = "appRoot";
-  root.style.padding = "14px";
-  root.style.color = "white";
-  root.innerHTML = `
-    <div style="display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px;">
-      <div style="font-weight:900;font-size:18px;">Spanish Trainer</div>
-      <div style="display:flex;gap:10px;opacity:.9;">
-        <div>⚡ <span id="xpVal">0</span></div>
-        <div>🔥 <span id="streakVal">1</span></div>
-      </div>
+function lessonById(id) {
+  for (const lvl of COURSE.levels) {
+    for (const unit of lvl.units) {
+      for (const lesson of unit.lessons) {
+        if (lesson.id === id) return { lvl, unit, lesson };
+      }
+    }
+  }
+  return null;
+}
+
+function unitProgress(unit) {
+  const total = unit.lessons.length;
+  const done = unit.lessons.filter(l => state.completed[l.id]).length;
+  return { done, total };
+}
+
+function renderTopBar() {
+  const wrap = document.createElement("div");
+  wrap.className = "topBar";
+
+  const left = document.createElement("div");
+  left.className = "brand";
+  left.innerHTML = `
+    <div class="logo"></div>
+    <div>
+      <div class="brandTitle">${COURSE.title}</div>
+      <div class="brandSub">мини-дуо режим 😏 • без лимитов</div>
     </div>
-
-    <div style="display:flex;gap:8px;margin-bottom:12px;">
-      <button class="tabBtn" data-tab="home">Путь</button>
-      <button class="tabBtn" data-tab="train">Тренировка</button>
-      <button class="tabBtn" data-tab="vocab">Словарь</button>
-    </div>
-
-    <div id="homeView">
-      <div style="margin:10px 0;opacity:.8;">Цель дня: <span id="goalText"></span></div>
-      <div style="height:10px;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden;margin-bottom:12px;">
-        <div id="goalBar" style="height:100%;width:0;background:rgba(44,226,107,.75);"></div>
-      </div>
-      <div id="units"></div>
-    </div>
-
-    <div id="lessonView" style="display:none;">
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
-        <button id="backBtn">←</button>
-        <div id="lessonTitle" style="font-weight:900;"></div>
-      </div>
-      <div id="prompt" style="font-size:18px;font-weight:900;margin:12px 0;"></div>
-      <div id="options" style="display:grid;gap:10px;"></div>
-
-      <div id="tilesArea" style="display:none;margin-top:14px;">
-        <div id="tilesPicked" style="min-height:44px;padding:10px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);margin-bottom:10px;"></div>
-        <div id="tilesBank" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
-      </div>
-
-      <div id="inputWrap" style="display:none;margin-top:12px;">
-        <input id="answerInput" placeholder="Введи ответ..." style="width:100%;padding:12px;border-radius:14px;border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.25);color:white;">
-      </div>
-
-      <div style="display:flex;gap:10px;margin-top:14px;">
-        <button id="checkBtn">Проверить</button>
-        <button id="nextBtn" disabled>Дальше</button>
-      </div>
-    </div>
-
-    <div id="trainView" style="display:none;">
-      <div style="font-weight:900;margin:8px 0 14px;">Тренировка</div>
-      <div style="opacity:.8;">Нажми “Старт”, чтобы повторять слова из словаря.</div>
-      <button id="trainStart" style="margin-top:12px;">Старт</button>
-    </div>
-
-    <div id="vocabView" style="display:none;">
-      <div style="font-weight:900;margin:8px 0 14px;">Словарь</div>
-      <div id="vocabList" style="display:grid;gap:10px;"></div>
-    </div>
-
-    <div id="toast" class="toast"></div>
   `;
-  document.body.appendChild(root);
 
-  // rebind ui
-  ui.xp = $("xpVal");
-  ui.streak = $("streakVal");
-  ui.goalBar = $("goalBar");
-  ui.goalText = $("goalText");
+  const right = document.createElement("div");
+  right.className = "pills";
+  right.innerHTML = `
+    <div class="pill"><span class="ico">⚡</span><span id="xpTotal">${state.xpTotal}</span></div>
+    <div class="pill"><span class="ico">🔥</span><span id="streak">${state.streak}</span></div>
+  `;
 
-  ui.homeView = $("homeView");
-  ui.lessonView = $("lessonView");
-  ui.vocabView = $("vocabView");
-  ui.trainView = $("trainView");
-
-  ui.units = $("units");
-  ui.lessonTitle = $("lessonTitle");
-  ui.prompt = $("prompt");
-  ui.options = $("options");
-  ui.tilesArea = $("tilesArea");
-  ui.tilesPicked = $("tilesPicked");
-  ui.input = $("answerInput");
-  ui.checkBtn = $("checkBtn");
-  ui.nextBtn = $("nextBtn");
-  ui.backBtn = $("backBtn");
-  ui.vocabList = $("vocabList");
+  wrap.appendChild(left);
+  wrap.appendChild(right);
+  return wrap;
 }
 
-ensureBasicLayout();
+function renderNav() {
+  const nav = document.createElement("div");
+  nav.className = "nav";
 
-/* ===========================
-   Top UI sync
-=========================== */
-function syncTopUI() {
-  if (ui.xp) ui.xp.textContent = String(state.xp);
-  if (ui.streak) ui.streak.textContent = String(state.streak);
+  const items = [
+    ["home", "🏠", "Главная"],
+    ["practice", "🎯", "Практика"],
+    ["league", "🏆", "Лига"],
+    ["vocab", "📚", "Словарь"],
+  ];
 
-  const goal = state.dailyGoal || 50;
-  const pct = clamp(Math.round((state.todayXp / goal) * 100), 0, 100);
-
-  if (ui.goalBar) ui.goalBar.style.width = `${pct}%`;
-  if (ui.goalText) ui.goalText.textContent = `${state.todayXp} / ${goal} XP`;
-
-  if (ui.todayAnswers) ui.todayAnswers.textContent = String(state.todayAnswers);
-
-  if (ui.accuracy) {
-    const acc = state.todayAnswers > 0 ? Math.round((state.todayCorrect / state.todayAnswers) * 100) : 0;
-    ui.accuracy.textContent = `${acc}%`;
+  for (const [id, ico, label] of items) {
+    const b = document.createElement("button");
+    b.className = state.tab === id ? "active" : "";
+    b.innerHTML = `<span>${ico}</span><span>${label}</span>`;
+    b.onclick = () => setTab(id);
+    nav.appendChild(b);
   }
-}
-
-syncTopUI();
-
-/* ===========================
-   Level lock A1/A2
-=========================== */
-function isLevelUnlocked(level) {
-  if (level === "A1") return true;
-  if (level === "A2") {
-    const a1Lessons = COURSE.units
-      .filter((u) => u.level === "A1")
-      .flatMap((u) => u.lessons);
-    return a1Lessons.every((l) => Boolean(state.completed[l.id]));
-  }
-  return true;
-}
-
-/* ===========================
-   Home rendering (PATH)
-=========================== */
-function findNextLessonId() {
-  for (const u of COURSE.units) {
-    for (const l of u.lessons) {
-      if (!state.completed[l.id]) return l.id;
-    }
-  }
-  // all completed: return first for practice
-  return COURSE.units[0]?.lessons[0]?.id || null;
+  return nav;
 }
 
 function renderHome() {
-  syncTopUI();
+  const grid = document.createElement("div");
+  grid.className = "grid";
 
-  const container = ui.units;
-  if (!container) return;
+  // hero
+  const hero = document.createElement("div");
+  hero.className = "hero";
 
-  container.innerHTML = "";
+  hero.innerHTML = `
+    <h1>Учись быстро, приятно и без духоты</h1>
+    <p>Кликаешь узел → проходишь урок → получаешь XP. Сердечек нет, лимитов нет 😌</p>
+    <div class="heroActions">
+      <button class="btn" id="btnContinue">Продолжить</button>
+      <button class="btnGhost" id="btnSync">Синк в бота</button>
+    </div>
+  `;
 
-  const nextId = findNextLessonId();
+  // right card
+  const nextId = computeNextLessonId();
+  const stats = document.createElement("div");
+  stats.className = "card";
+  stats.innerHTML = `
+    <div class="cardTitle">
+      <span>Цель дня</span>
+      <span class="small">стандарт</span>
+    </div>
+    <div class="progressBar"><div id="goalBar"></div></div>
+    <div class="small" style="margin-top:8px">${state.dayXp} / ${state.dayGoal} XP</div>
 
-  COURSE.units.forEach((unit) => {
-    const wrap = document.createElement("div");
-    wrap.className = "unit";
+    <div class="kpis">
+      <div class="kpi">
+        <div class="v">${state.dayAnswers}</div>
+        <div class="t">Сегодня ответов</div>
+      </div>
+      <div class="kpi">
+        <div class="v">${state.dayAnswers ? Math.round((state.dayCorrect/state.dayAnswers)*100) : 0}%</div>
+        <div class="t">Точность</div>
+      </div>
+    </div>
 
-    // head
-    const doneCount = unit.lessons.filter((l) => Boolean(state.completed[l.id])).length;
-    const head = document.createElement("div");
-    head.className = "unitHead";
-    head.innerHTML = `<b>${unit.title}</b><span>${doneCount} / ${unit.lessons.length} пройдено</span>`;
-    wrap.appendChild(head);
+    <div class="kpi" style="margin-top:10px">
+      <div class="v">${Object.keys(state.vocab).length}</div>
+      <div class="t">Изучено слов</div>
+    </div>
 
-    const unlocked = isLevelUnlocked(unit.level);
+    <div class="small" style="margin-top:12px">
+      Следующий урок: <b>${nextId ? lessonById(nextId).lesson.title : "всё пройдено ✅"}</b>
+    </div>
+  `;
 
-    // path
-    const path = document.createElement("div");
-    path.className = "path";
+  // path
+  const path = document.createElement("div");
+  path.className = "pathWrap";
 
-    unit.lessons.forEach((lesson, i) => {
-      const done = Boolean(state.completed[lesson.id]);
-      const isNext = lesson.id === nextId;
+  const header = document.createElement("div");
+  header.className = "cardTitle";
+  header.innerHTML = `
+    <span>Путь обучения</span>
+    <span class="small">модули → уроки → задания</span>
+  `;
+  path.appendChild(header);
 
-      const node = document.createElement("div");
-      const pos =
-        i % 3 === 0
-          ? "pathNode"
-          : i % 3 === 1
-          ? "pathNode pathNode--center"
-          : "pathNode pathNode--right";
-      node.className = pos;
+  const pathColumn = document.createElement("div");
+  pathColumn.className = "pathColumn";
 
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className =
-        "nodeBtn " + (done ? "nodeBtn--done" : isNext ? "nodeBtn--next" : "");
-      btn.innerHTML = done ? "✅" : isNext ? "➡️" : "⚡";
-      if (!unlocked) btn.style.opacity = "0.45";
+  const nextLesson = computeNextLessonId();
 
-      btn.onclick = () => {
-        if (!unlocked) {
-          showToast("🔒 Сначала закрой A1, потом откроется A2");
-          return;
-        }
-        startLesson(lesson.id, { practice: false });
-      };
+  for (const lvl of COURSE.levels) {
+    const lvlLocked = lvl.locked && !courseDoneA1();
 
-      const info = document.createElement("div");
-      info.style.width = "110px";
-      info.innerHTML = `
-        <div class="nodeText">${lesson.title}</div>
-        <div class="nodeSub">${lesson.xp} XP</div>
+    const lvlHead = document.createElement("div");
+    lvlHead.className = "levelHeader";
+    lvlHead.innerHTML = `
+      <div class="levelTitle">${lvl.title}</div>
+      ${lvlLocked ? `<div class="levelLock">${lvl.lockText || "закрыто"}</div>` : `<div class="levelLock">открыто</div>`}
+    `;
+    pathColumn.appendChild(lvlHead);
+
+    for (const unit of lvl.units) {
+      const row = document.createElement("div");
+      row.className = "unitRow";
+
+      const p = unitProgress(unit);
+      row.innerHTML = `
+        <div class="unitTop">
+          <div class="uTitle">${unit.title}</div>
+          <div class="uProg">${p.done}/${p.total} пройдено</div>
+        </div>
       `;
 
-      const col = document.createElement("div");
-      col.style.display = "grid";
-      col.style.justifyItems = "center";
-      col.appendChild(btn);
-      col.appendChild(info);
+      const nodes = document.createElement("div");
+      nodes.className = "nodes";
 
-      node.appendChild(col);
-      path.appendChild(node);
-    });
+      unit.lessons.forEach((lesson, idx) => {
+        const done = Boolean(state.completed[lesson.id]);
+        const isNext = lesson.id === nextLesson;
+        const locked = lvlLocked || (!done && nextLesson !== lesson.id && !state.completed[lesson.id] && computeNextLessonId() !== lesson.id && !isNext);
 
-    wrap.appendChild(path);
-    container.appendChild(wrap);
-  });
-}
+        // zigzag offset pattern
+        const offsets = [0, 140, 60, 180, 30, 160];
+        const offset = offsets[idx % offsets.length];
 
-/* ===========================
-   Lesson engine
-=========================== */
-let active = {
-  lessonId: null,
-  lesson: null,
-  unit: null,
-  mode: "lesson", // lesson|practice
-  queue: [],
-  index: 0,
-  current: null,
-  answered: false,
-  correct: false,
+        const nodeRow = document.createElement("div");
+        nodeRow.className = "nodeRow";
+        nodeRow.style.marginLeft = `${offset}px`;
 
-  // tiles
-  tilesPicked: [],
-  tilesBank: []
-};
+        const node = document.createElement("div");
+        node.className = "node" + (done ? " done" : "") + (isNext ? " next" : "") + (lvlLocked ? " locked" : "");
+        node.innerHTML = `
+          <div class="icon">${done ? "✅" : (isNext ? "➡️" : "⚡")}</div>
+          <div class="label">
+            <div class="t">${lesson.title}</div>
+            <div class="s">${lesson.xp} XP • ${done ? "пройдено" : (isNext ? "следующий" : (lvlLocked ? "закрыто" : "доступно"))}</div>
+          </div>
+        `;
 
-function buildTaskQueue(lesson, mode) {
-  const pairs = lesson.pairs.slice();
+        node.onclick = () => {
+          if (lvlLocked) return;
+          // allow open if done or next, or if earlier lessons done in unlocked level (простая логика)
+          const mustBe = computeNextLessonId();
+          if (!done && mustBe && mustBe !== lesson.id) {
+            showToast("Сначала пройди следующий доступный узел 🙂");
+            return;
+          }
+          openLesson(lesson.id);
+        };
 
-  // In practice mode: mix with all known words too
-  let pool = pairs;
-  if (mode === "practice") {
-    const all = getAllPairs();
-    pool = shuffle(all).slice(0, 10);
+        nodes.appendChild(nodeRow);
+        nodeRow.appendChild(node);
+
+        // connector
+        if (idx < unit.lessons.length - 1) {
+          const c = document.createElement("div");
+          c.className = "connector";
+          c.style.marginLeft = `${offset + 43}px`;
+          nodes.appendChild(c);
+        }
+      });
+
+      row.appendChild(nodes);
+      pathColumn.appendChild(row);
+    }
   }
 
-  const tasks = [];
-  pool.forEach((p, idx) => {
-    // rotate task types to keep it fun
-    const t = idx % 3; // 0 mcq, 1 tiles, 2 input
-    if (t === 0) tasks.push({ type: "mcq", pair: p });
-    if (t === 1) tasks.push({ type: "tiles", pair: p });
-    if (t === 2) tasks.push({ type: "input", pair: p });
-  });
+  path.appendChild(pathColumn);
 
-  return shuffle(tasks);
+  grid.appendChild(hero);
+  grid.appendChild(stats);
+
+  const wrap = document.createElement("div");
+  wrap.appendChild(grid);
+  wrap.appendChild(path);
+
+  // hooks
+  setTimeout(() => {
+    const bar = $("goalBar");
+    if (bar) {
+      const pct = Math.min(100, Math.round((state.dayXp / Math.max(1, state.dayGoal)) * 100));
+      bar.style.width = pct + "%";
+    }
+
+    $("btnContinue")?.addEventListener("click", () => {
+      const id = computeNextLessonId();
+      if (!id) return showToast("Всё пройдено ✅");
+      openLesson(id);
+    });
+
+    $("btnSync")?.addEventListener("click", () => {
+      if (!isTelegramWebApp()) return showToast("Открой это в Telegram Mini App");
+      tgSendStats("manual_sync");
+      showToast("Отправил статистику боту ✅");
+    });
+  }, 0);
+
+  return wrap;
 }
 
-function showView(name) {
-  const map = {
-    home: ui.homeView,
-    lesson: ui.lessonView,
-    vocab: ui.vocabView,
-    train: ui.trainView,
-    profile: ui.profileView
+function renderPractice() {
+  const card = document.createElement("div");
+  card.className = "card";
+  card.innerHTML = `
+    <div class="cardTitle">
+      <span>Практика</span>
+      <span class="small">повторение</span>
+    </div>
+    <div class="small">Выбирай случайные задания из уже пройденных уроков.</div>
+    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn" id="btnPractice">Старт практики</button>
+      <button class="btnGhost" id="btnPracticeHard">Хард режим</button>
+    </div>
+  `;
+
+  setTimeout(() => {
+    $("btnPractice")?.addEventListener("click", () => startPractice(false));
+    $("btnPracticeHard")?.addEventListener("click", () => startPractice(true));
+  }, 0);
+
+  return card;
+}
+
+function renderLeague() {
+  const card = document.createElement("div");
+  card.className = "card";
+
+  const pct = state.dayAnswers ? Math.round((state.dayCorrect / state.dayAnswers) * 100) : 0;
+
+  card.innerHTML = `
+    <div class="cardTitle">
+      <span>Лига</span>
+      <span class="small">неделя</span>
+    </div>
+
+    <div class="kpi">
+      <div class="v">${state.weekXp} XP</div>
+      <div class="t">Твоя неделя (${state.weekKey})</div>
+    </div>
+
+    <div class="kpis" style="margin-top:10px">
+      <div class="kpi">
+        <div class="v">${state.xpTotal}</div>
+        <div class="t">Всего XP</div>
+      </div>
+      <div class="kpi">
+        <div class="v">${pct}%</div>
+        <div class="t">Точность сегодня</div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn" id="btnSendLeague">Отправить в бота</button>
+      <button class="btnGhost" id="btnResetWeek">Сбросить неделю (локально)</button>
+    </div>
+
+    <div class="small" style="margin-top:10px">
+      <b>Глобальная</b> лига (топ всех пользователей) считает бот — по тем данным, что ты отправляешь “Отправить в бота”.
+    </div>
+  `;
+
+  setTimeout(() => {
+    $("btnSendLeague")?.addEventListener("click", () => {
+      if (!isTelegramWebApp()) return showToast("Открой в Telegram Mini App");
+      tgSendStats("league_sync");
+      showToast("Отправил ✅");
+    });
+    $("btnResetWeek")?.addEventListener("click", () => {
+      state.weekXp = 0;
+      saveState();
+      showToast("Сбросил неделю локально");
+      render();
+    });
+  }, 0);
+
+  return card;
+}
+
+function renderVocab() {
+  const card = document.createElement("div");
+  card.className = "card";
+
+  const words = Object.entries(state.vocab)
+    .map(([w, o]) => ({ w, ...o }))
+    .sort((a, b) => (b.last || "").localeCompare(a.last || ""));
+
+  card.innerHTML = `
+    <div class="cardTitle">
+      <span>Словарь</span>
+      <span class="small">${words.length} слов</span>
+    </div>
+
+    <div class="inputRow">
+      <input id="vocabSearch" placeholder="поиск…" />
+      <button class="btnGhost" id="btnClearVocab">Очистить</button>
+    </div>
+
+    <div id="vocabList" style="margin-top:12px;display:flex;flex-direction:column;gap:10px"></div>
+  `;
+
+  function draw(filter = "") {
+    const list = $("vocabList");
+    if (!list) return;
+    list.innerHTML = "";
+
+    const f = normalizeAnswer(filter);
+    const filtered = words.filter(x => normalizeAnswer(x.w).includes(f));
+
+    if (!filtered.length) {
+      const e = document.createElement("div");
+      e.className = "small";
+      e.textContent = "Пока пусто. Проходи уроки — слова будут появляться тут.";
+      list.appendChild(e);
+      return;
+    }
+
+    for (const it of filtered) {
+      const row = document.createElement("div");
+      row.className = "kpi";
+      const acc = it.seen ? Math.round((it.correct / it.seen) * 100) : 0;
+      row.innerHTML = `
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:center">
+          <div>
+            <div class="v" style="font-size:18px">${it.w}</div>
+            <div class="t">видел: ${it.seen} • верно: ${it.correct} • ${acc}%</div>
+          </div>
+          <button class="btnGhost" data-word="${it.w}">Повторить</button>
+        </div>
+      `;
+      row.querySelector("button")?.addEventListener("click", () => startVocabReview(it.w));
+      list.appendChild(row);
+    }
+  }
+
+  setTimeout(() => {
+    const inp = $("vocabSearch");
+    inp?.addEventListener("input", () => draw(inp.value));
+
+    $("btnClearVocab")?.addEventListener("click", () => {
+      if (!confirm("Точно очистить словарь (локально)?")) return;
+      state.vocab = {};
+      saveState();
+      showToast("Очистил словарь");
+      render();
+    });
+
+    draw("");
+  }, 0);
+
+  return card;
+}
+
+function render() {
+  const root = $("app");
+  root.innerHTML = "";
+
+  root.appendChild(renderTopBar());
+  root.appendChild(renderNav());
+
+  if (state.tab === "home") root.appendChild(renderHome());
+  if (state.tab === "practice") root.appendChild(renderPractice());
+  if (state.tab === "league") root.appendChild(renderLeague());
+  if (state.tab === "vocab") root.appendChild(renderVocab());
+}
+
+/** ---------- lesson modal engine ---------- */
+let lessonRuntime = null;
+
+function openLesson(lessonId) {
+  const data = lessonById(lessonId);
+  if (!data) return;
+
+  const { lesson } = data;
+
+  lessonRuntime = {
+    lessonId,
+    lesson,
+    idx: 0,
+    selected: null,
+    tilePool: [],
+    tilePick: [],
+    inputVal: "",
+    checked: false,
+    lastCorrect: null,
   };
 
-  Object.entries(map).forEach(([k, el]) => {
-    if (!el) return;
-    el.style.display = k === name ? "" : "none";
-  });
+  $("modal").classList.remove("hidden");
+  $("modalClose").onclick = closeLesson;
+  $("btnSkip").onclick = skipTask;
+  $("btnCheck").onclick = checkOrNext;
+
+  drawTask();
 }
 
-function setButtonsState() {
-  if (ui.nextBtn) ui.nextBtn.disabled = !active.answered;
-  if (ui.checkBtn) ui.checkBtn.disabled = active.answered;
+function closeLesson() {
+  $("modal").classList.add("hidden");
+  lessonRuntime = null;
+  $("modalHint").textContent = "";
+  $("modalHint").className = "hint";
 }
 
-function setLessonHeader() {
-  if (!ui.lessonTitle) return;
-  const title = active.mode === "practice" ? "Тренировка" : active.lesson.title;
-  ui.lessonTitle.textContent = title;
+function currentTask() {
+  if (!lessonRuntime) return null;
+  return lessonRuntime.lesson.tasks[lessonRuntime.idx] || null;
 }
 
-function renderTask() {
-  active.answered = false;
-  active.correct = false;
-  active.tilesPicked = [];
-  active.tilesBank = [];
+function drawTask() {
+  const rt = lessonRuntime;
+  if (!rt) return;
 
-  setButtonsState();
-  setLessonHeader();
+  const total = rt.lesson.tasks.length;
+  const idx = rt.idx + 1;
 
-  const task = active.queue[active.index];
-  active.current = task;
+  $("modalTitle").textContent = rt.lesson.title;
+  $("modalSub").textContent = `${idx}/${total} • ${rt.lesson.xp} XP за урок`;
+  $("modalHint").textContent = "";
+  $("modalHint").className = "hint";
 
-  // clear
-  if (ui.options) ui.options.innerHTML = "";
-  const tilesBankEl = $("tilesBank");
-  if (tilesBankEl) tilesBankEl.innerHTML = "";
-  if (ui.tilesPicked) ui.tilesPicked.textContent = "";
-  if (ui.input) ui.input.value = "";
+  const body = $("modalBody");
+  body.innerHTML = "";
 
-  // hide/show areas
-  if (ui.tilesArea) ui.tilesArea.style.display = "none";
-  const inputWrap = $("inputWrap");
-  if (inputWrap) inputWrap.style.display = "none";
-
-  // prompt
-  if (ui.prompt) ui.prompt.textContent = "";
-
+  const task = currentTask();
   if (!task) {
+    // lesson finished
     finishLesson();
     return;
   }
 
+  rt.checked = false;
+  rt.lastCorrect = null;
+  rt.selected = null;
+  rt.inputVal = "";
+  rt.tilePick = [];
+  rt.tilePool = [];
+
+  const box = document.createElement("div");
+  box.className = "taskBox";
+  box.innerHTML = `
+    <div class="taskQ">${task.q}</div>
+    <div class="taskHelp">${task.type === "tiles" ? "кликай слова, собери ответ" :
+                           task.type === "input" ? "введи ответ и жми проверить" :
+                           "выбери вариант"}</div>
+  `;
+
   if (task.type === "mcq") {
-    const ru = task.pair.ru;
-    if (ui.prompt) ui.prompt.textContent = `Переведи на ES: ${ru}`;
-
-    const correct = task.pair.es;
-    const distractors = shuffle(
-      uniq(getAllPairs().map((x) => x.es)).filter((x) => x !== correct)
-    ).slice(0, 3);
-
-    const choices = shuffle([correct, ...distractors]);
-
-    choices.forEach((choice) => {
-      const btn = document.createElement("button");
-      btn.className = "optionBtn";
-      btn.type = "button";
-      btn.textContent = choice;
-
-      btn.onclick = () => {
-        if (active.answered) return;
-        active.answered = true;
-        active.correct = normalizeAnswer(choice) === normalizeAnswer(correct);
-        // highlight
-        const allBtns = ui.options?.querySelectorAll("button") || [];
-        allBtns.forEach((b) => (b.disabled = true));
-        btn.classList.add(active.correct ? "optionBtn--ok" : "optionBtn--bad");
-        setButtonsState();
+    const opts = document.createElement("div");
+    opts.className = "options";
+    task.options.forEach((t) => {
+      const b = document.createElement("div");
+      b.className = "opt";
+      b.textContent = t;
+      b.onclick = () => {
+        if (rt.checked) return;
+        rt.selected = t;
+        [...opts.children].forEach(x => x.classList.remove("selected"));
+        b.classList.add("selected");
       };
-
-      ui.options.appendChild(btn);
+      opts.appendChild(b);
     });
-    return;
+    box.appendChild(opts);
   }
 
   if (task.type === "tiles") {
-    const ru = task.pair.ru;
-    if (ui.prompt) ui.prompt.textContent = `Собери фразу (ES): ${ru}`;
+    const wrap = document.createElement("div");
+    wrap.className = "tilesWrap";
 
-    if (ui.tilesArea) ui.tilesArea.style.display = "";
+    const topLine = document.createElement("div");
+    topLine.className = "tileLine";
+    topLine.id = "tilePick";
 
-    const words = task.pair.es.split(" ").filter(Boolean);
-    const bank = shuffle(words);
+    const botLine = document.createElement("div");
+    botLine.className = "tileLine";
+    botLine.id = "tilePool";
 
-    active.tilesBank = bank.slice();
+    const tiles = shuffle(task.tiles);
+    rt.tilePool = tiles;
 
-    const bankEl = $("tilesBank");
-    const pickedEl = ui.tilesPicked;
+    function redrawTiles() {
+      topLine.innerHTML = "";
+      botLine.innerHTML = "";
 
-    function rerenderPicked() {
-      if (!pickedEl) return;
-      pickedEl.textContent = active.tilesPicked.join(" ");
-      // when fully built, allow check
-      if (active.tilesPicked.length === words.length) {
-        // enable check button (not answered yet)
-      }
-    }
-
-    function renderBank() {
-      if (!bankEl) return;
-      bankEl.innerHTML = "";
-      active.tilesBank.forEach((w, idx) => {
-        const b = document.createElement("button");
-        b.type = "button";
-        b.className = "tileBtn";
-        b.textContent = w;
-
-        b.onclick = () => {
-          if (active.answered) return;
-          // pick tile
-          active.tilesPicked.push(w);
-          active.tilesBank.splice(idx, 1);
-          renderBank();
-          rerenderPicked();
+      rt.tilePick.forEach((w, i) => {
+        const t = document.createElement("div");
+        t.className = "tile";
+        t.textContent = w;
+        t.onclick = () => {
+          if (rt.checked) return;
+          rt.tilePick.splice(i, 1);
+          rt.tilePool.push(w);
+          redrawTiles();
         };
-
-        bankEl.appendChild(b);
+        topLine.appendChild(t);
       });
 
-      // add backspace
-      const back = document.createElement("button");
-      back.type = "button";
-      back.className = "tileBtn tileBtn--muted";
-      back.textContent = "⌫";
-
-      back.onclick = () => {
-        if (active.answered) return;
-        const last = active.tilesPicked.pop();
-        if (last) active.tilesBank.push(last);
-        active.tilesBank = shuffle(active.tilesBank);
-        renderBank();
-        rerenderPicked();
-      };
-      bankEl.appendChild(back);
+      rt.tilePool.forEach((w, i) => {
+        const t = document.createElement("div");
+        t.className = "tile";
+        t.textContent = w;
+        t.onclick = () => {
+          if (rt.checked) return;
+          rt.tilePool.splice(i, 1);
+          rt.tilePick.push(w);
+          redrawTiles();
+        };
+        botLine.appendChild(t);
+      });
     }
 
-    renderBank();
-    rerenderPicked();
-
-    // For tiles task: user presses "Проверить"
-    return;
+    redrawTiles();
+    wrap.appendChild(topLine);
+    wrap.appendChild(botLine);
+    box.appendChild(wrap);
   }
 
   if (task.type === "input") {
-    const ru = task.pair.ru;
-    if (ui.prompt) ui.prompt.textContent = `Введи по-испански: ${ru}`;
+    const row = document.createElement("div");
+    row.className = "inputRow";
+    row.innerHTML = `
+      <input id="answerInput" placeholder="${task.placeholder || "введи ответ…"}" />
+      <button class="btnGhost" id="btnClearInput">Очистить</button>
+    `;
+    box.appendChild(row);
 
-    const inputWrap = $("inputWrap");
-    if (inputWrap) inputWrap.style.display = "";
-
-    if (ui.input) {
-      ui.input.focus();
-      ui.input.onkeydown = (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          if (!active.answered) onCheck();
-        }
-      };
-    }
-    return;
+    setTimeout(() => {
+      const inp = $("answerInput");
+      inp?.focus();
+      inp?.addEventListener("input", () => (rt.inputVal = inp.value));
+      $("btnClearInput")?.addEventListener("click", () => {
+        rt.inputVal = "";
+        if (inp) inp.value = "";
+        inp?.focus();
+      });
+    }, 0);
   }
+
+  body.appendChild(box);
+
+  // button label
+  $("btnCheck").textContent = "Проверить";
 }
 
-function gradeCurrent() {
-  const task = active.current;
-  if (!task) return { ok: false, expected: "" };
+function skipTask() {
+  if (!lessonRuntime) return;
+  lessonRuntime.idx++;
+  drawTask();
+}
 
+function checkOrNext() {
+  const rt = lessonRuntime;
+  if (!rt) return;
+
+  if (rt.checked) {
+    // next
+    rt.idx++;
+    drawTask();
+    return;
+  }
+
+  const task = currentTask();
+  if (!task) return;
+
+  // Build user answer
+  let userAnswer = "";
+  if (task.type === "mcq") userAnswer = rt.selected ?? "";
+  if (task.type === "tiles") userAnswer = rt.tilePick.join(" ");
+  if (task.type === "input") userAnswer = rt.inputVal ?? "";
+
+  const ok = normalizeAnswer(userAnswer) === normalizeAnswer(task.a);
+  rt.checked = true;
+  rt.lastCorrect = ok;
+
+  // update daily stats
+  touchActivity();
+  state.dayAnswers += 1;
+  if (ok) state.dayCorrect += 1;
+
+  // vocab update
+  if (Array.isArray(task.vocab)) {
+    for (const w of task.vocab) {
+      const key = w.trim();
+      if (!key) continue;
+      const obj = state.vocab[key] || { seen: 0, correct: 0, last: null };
+      obj.seen += 1;
+      if (ok) obj.correct += 1;
+      obj.last = new Date().toISOString();
+      state.vocab[key] = obj;
+    }
+  }
+
+  // UI feedback
+  const hint = $("modalHint");
+  if (ok) {
+    hint.textContent = `✅ Верно! +XP`;
+    hint.className = "hint ok";
+  } else {
+    hint.textContent = `❌ Неверно. Правильно: ${task.a}`;
+    hint.className = "hint bad";
+  }
+
+  // style options if mcq
   if (task.type === "mcq") {
-    // already graded on click
-    return { ok: active.correct, expected: task.pair.es };
+    const opts = document.querySelectorAll(".opt");
+    opts.forEach(el => {
+      const txt = el.textContent;
+      if (normalizeAnswer(txt) === normalizeAnswer(task.a)) el.classList.add("correct");
+      if (rt.selected && normalizeAnswer(txt) === normalizeAnswer(rt.selected) && !ok) el.classList.add("wrong");
+    });
   }
 
-  if (task.type === "tiles") {
-    const expected = task.pair.es;
-    const got = active.tilesPicked.join(" ");
-    const ok = normalizeAnswer(got) === normalizeAnswer(expected);
-    return { ok, expected };
+  // XP only if correct (можно поменять позже)
+  if (ok) {
+    const gain = Math.max(1, Math.round(rt.lesson.xp / rt.lesson.tasks.length));
+    state.xpTotal += gain;
+    state.dayXp += gain;
+    state.weekXp += gain;
   }
-
-  if (task.type === "input") {
-    const expected = task.pair.es;
-    const got = ui.input ? ui.input.value : "";
-    const ok = normalizeAnswer(got) === normalizeAnswer(expected);
-    return { ok, expected };
-  }
-
-  return { ok: false, expected: "" };
-}
-
-function addXp(amount) {
-  const d = dayKey();
-  state.xp += amount;
-  state.todayXp += amount;
-  state.xpByDay[d] = (state.xpByDay[d] || 0) + amount;
-  saveState();
-  syncTopUI();
-}
-
-function updateVocab(pair, ok) {
-  const key = pair.es;
-  state.vocab[key] = state.vocab[key] || { seen: 0, correct: 0, ru: pair.ru };
-  state.vocab[key].seen += 1;
-  if (ok) state.vocab[key].correct += 1;
-  saveState();
-}
-
-function onCheck() {
-  if (active.answered) return;
-
-  // For tiles/input: grade now
-  if (active.current?.type === "tiles" || active.current?.type === "input") {
-    const res = gradeCurrent();
-    active.answered = true;
-    active.correct = res.ok;
-
-    // show feedback
-    if (!res.ok) showToast(`❌ Правильно: ${res.expected}`);
-    else showToast("✅ Верно!");
-
-    setButtonsState();
-    return;
-  }
-
-  // For mcq user selects option; check button does nothing
-  showToast("Выбери вариант 👇");
-}
-
-function onNext() {
-  if (!active.answered) return;
-
-  // apply stats for this task
-  const task = active.current;
-  const res = gradeCurrent();
-  const ok = Boolean(res.ok);
-
-  state.todayAnswers += 1;
-  if (ok) state.todayCorrect += 1;
-
-  // xp per task
-  const xpGain = ok ? 5 : 2;
-  addXp(xpGain);
-
-  if (task?.pair) updateVocab(task.pair, ok);
 
   saveState();
-  syncTopUI();
 
-  // send to bot
-  sendToBot({
-    type: "answer",
-    user: getUserTag(),
-    day: state.day,
-    ok,
-    xpGain,
-    lessonId: active.lessonId,
-    mode: active.mode,
-    ru: task?.pair?.ru || "",
-    es: task?.pair?.es || ""
-  });
-
-  // daily quests
-  checkDailyQuests();
-
-  // next task
-  active.index += 1;
-  renderTask();
-}
-
-function startLesson(lessonId, opts = { practice: false }) {
-  const found = findLessonById(lessonId);
-  if (!found) {
-    showToast("Не найден урок");
-    return;
-  }
-
-  active.lessonId = lessonId;
-  active.lesson = found.lesson;
-  active.unit = found.unit;
-  active.mode = opts.practice ? "practice" : "lesson";
-  active.queue = buildTaskQueue(found.lesson, active.mode);
-  active.index = 0;
-
-  // bind buttons
-  if (ui.backBtn) {
-    ui.backBtn.onclick = () => {
-      showView("home");
-      renderHome();
-    };
-  }
-  if (ui.checkBtn) ui.checkBtn.onclick = onCheck;
-  if (ui.nextBtn) ui.nextBtn.onclick = onNext;
-
-  showView("lesson");
-  renderTask();
-
-  sendToBot({
-    type: "lesson_open",
-    user: getUserTag(),
-    day: state.day,
-    lessonId,
-    mode: active.mode
-  });
+  $("btnCheck").textContent = "Дальше";
 }
 
 function finishLesson() {
-  // mark completed only in lesson mode
-  if (active.mode === "lesson") {
-    state.completed[active.lessonId] = true;
-    saveState();
-  }
+  const rt = lessonRuntime;
+  if (!rt) return;
 
-  // lesson bonus
-  const bonus = active.mode === "lesson" ? active.lesson.xp : 0;
-  if (bonus > 0) addXp(bonus);
+  // mark lesson complete
+  state.completed[rt.lessonId] = true;
 
-  // quest: close 1 lesson today
-  if (active.mode === "lesson") {
-    grantQuest("lesson1", 20, "Закрыл 1 урок сегодня");
-  }
+  // bonus XP for completion
+  const bonus = Math.max(2, Math.round(rt.lesson.xp * 0.3));
+  state.xpTotal += bonus;
+  state.dayXp += bonus;
+  state.weekXp += bonus;
 
-  sendToBot({
-    type: "lesson_finish",
-    user: getUserTag(),
-    day: state.day,
-    lessonId: active.lessonId,
-    mode: active.mode,
-    bonusXp: bonus
-  });
-
-  showToast(active.mode === "lesson" ? "🏁 Урок пройден!" : "🏁 Тренировка завершена");
-  showView("home");
-  renderHome();
-}
-
-/* ===========================
-   Daily quests
-=========================== */
-function grantQuest(id, rewardXp, text) {
-  if (state.dailyQuests.done[id]) return;
-  state.dailyQuests.done[id] = true;
-
-  addXp(rewardXp);
   saveState();
-  syncTopUI();
 
-  showToast(`🎁 Квест: ${text} (+${rewardXp} XP)`);
-  sendToBot({
-    type: "quest_done",
-    user: getUserTag(),
-    day: state.day,
-    questId: id,
-    rewardXp,
-    text
-  });
-}
+  // show finish screen
+  const body = $("modalBody");
+  body.innerHTML = `
+    <div class="taskBox">
+      <div class="taskQ">Урок пройден ✅</div>
+      <div class="taskHelp">+${bonus} XP бонусом за завершение. Можешь идти дальше.</div>
 
-function checkDailyQuests() {
-  // 10 answers
-  if (state.todayAnswers >= 10) {
-    grantQuest("answers10", 10, "10 ответов за день");
-  }
-
-  // 80% accuracy with 10+ answers
-  if (state.todayAnswers >= 10) {
-    const acc = Math.round((state.todayCorrect / state.todayAnswers) * 100);
-    if (acc >= 80) {
-      grantQuest("acc80", 15, "Точность 80%+");
-    }
-  }
-}
-
-/* ===========================
-   Vocab render
-=========================== */
-function renderVocab() {
-  syncTopUI();
-
-  if (!ui.vocabList) return;
-  ui.vocabList.innerHTML = "";
-
-  const entries = Object.entries(state.vocab || {})
-    .map(([es, st]) => ({ es, ...st }))
-    .sort((a, b) => (b.seen || 0) - (a.seen || 0));
-
-  if (entries.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "card";
-    empty.textContent = "Пока пусто. Пройди пару уроков 🙂";
-    ui.vocabList.appendChild(empty);
-    return;
-  }
-
-  entries.forEach((w) => {
-    const acc = w.seen ? Math.round((w.correct / w.seen) * 100) : 0;
-
-    const card = document.createElement("div");
-    card.className = "vocabCard";
-    card.innerHTML = `
-      <div class="vocabRow">
-        <div>
-          <div class="vocabEs">${w.es}</div>
-          <div class="vocabRu">${w.ru || ""}</div>
-        </div>
-        <div class="vocabStat">
-          <div>${acc}%</div>
-          <div class="muted">${w.correct || 0}/${w.seen || 0}</div>
-        </div>
+      <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn" id="btnFinishNext">Следующий урок</button>
+        <button class="btnGhost" id="btnFinishClose">На главную</button>
       </div>
-    `;
-    ui.vocabList.appendChild(card);
-  });
-}
-
-/* ===========================
-   Training
-=========================== */
-function startTraining() {
-  // pick random words from vocab or all
-  const pairs = getAllPairs();
-  const queue = shuffle(pairs).slice(0, 10).map((p, idx) => {
-    const t = idx % 3;
-    if (t === 0) return { type: "mcq", pair: p };
-    if (t === 1) return { type: "tiles", pair: p };
-    return { type: "input", pair: p };
-  });
-
-  active.lessonId = "practice";
-  active.lesson = { title: "Тренировка", xp: 0, pairs: pairs };
-  active.unit = { title: "Тренировка" };
-  active.mode = "practice";
-  active.queue = shuffle(queue);
-  active.index = 0;
-
-  if (ui.backBtn) {
-    ui.backBtn.onclick = () => {
-      showView("home");
-      renderHome();
-    };
-  }
-  if (ui.checkBtn) ui.checkBtn.onclick = onCheck;
-  if (ui.nextBtn) ui.nextBtn.onclick = onNext;
-
-  showView("lesson");
-  renderTask();
-}
-
-/* ===========================
-   Tabs / navigation
-=========================== */
-function bindTabs() {
-  // if there are buttons with data-tab, use them
-  const tabs = document.querySelectorAll("[data-tab]");
-  tabs.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const tab = btn.getAttribute("data-tab");
-      if (tab === "home") {
-        showView("home");
-        renderHome();
-      } else if (tab === "vocab") {
-        showView("vocab");
-        renderVocab();
-      } else if (tab === "train") {
-        showView("train");
-      } else if (tab === "profile") {
-        showView("profile");
-      }
-    });
-  });
-
-  const trainStart = $("trainStart");
-  if (trainStart) {
-    trainStart.onclick = () => startTraining();
-  }
-}
-
-bindTabs();
-
-/* ===========================
-   Initial render
-=========================== */
-renderHome();
-
-// Telegram theming (optional)
-try {
-  if (TG) {
-    TG.ready();
-    TG.expand();
-  }
-} catch {}
-
-/* ===========================
-   Styles fallback (only if your CSS doesn't have these)
-=========================== */
-(function injectSmallCssIfMissing() {
-  // If your styles.css already has these classes, this won't break anything,
-  // it just helps if something is missing.
-  if (document.getElementById("appjsStyle")) return;
-  const style = document.createElement("style");
-  style.id = "appjsStyle";
-  style.textContent = `
-    .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);
-      padding:10px 14px;border-radius:14px;background:rgba(0,0,0,.72);
-      border:1px solid rgba(255,255,255,.10);opacity:0;pointer-events:none;
-      transition:opacity .16s ease; z-index:9999; color:#fff; font-weight:800;}
-    .toast--show{opacity:1;}
-    .optionBtn{padding:14px;border-radius:16px;border:1px solid rgba(255,255,255,.10);
-      background:rgba(255,255,255,.06);color:#fff;font-weight:900;cursor:pointer;}
-    .optionBtn--ok{outline:2px solid rgba(44,226,107,.65);}
-    .optionBtn--bad{outline:2px solid rgba(255,80,80,.65);}
-    .tileBtn{padding:10px 12px;border-radius:14px;border:1px solid rgba(255,255,255,.10);
-      background:rgba(255,255,255,.06);color:#fff;font-weight:900;cursor:pointer;}
-    .tileBtn--muted{opacity:.8;}
-    .unit{margin:16px 0;padding:14px;border-radius:18px;background:rgba(255,255,255,.04);
-      border:1px solid rgba(255,255,255,.08);}
-    .unitHead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;}
-    .unitHead span{opacity:.7;font-size:12px;}
-    .path{display:flex;flex-direction:column;gap:14px;padding:10px 4px 18px 4px;}
-    .pathNode{width:100%;display:flex;justify-content:flex-start;}
-    .pathNode--right{justify-content:flex-end;}
-    .pathNode--center{justify-content:center;}
-    .nodeBtn{width:74px;height:74px;border-radius:999px;border:1px solid rgba(255,255,255,.10);
-      background:rgba(255,255,255,.06);display:grid;place-items:center;cursor:pointer;
-      transition:transform .12s ease, filter .12s ease;color:#fff;font-size:22px;}
-    .nodeBtn:hover{transform:translateY(-2px);filter:brightness(1.05);}
-    .nodeBtn--done{background:rgba(44,226,107,.15);border-color:rgba(44,226,107,.25);}
-    .nodeBtn--next{background:rgba(74,163,255,.14);border-color:rgba(74,163,255,.25);}
-    .nodeText{margin-top:8px;text-align:center;font-weight:900;color:#fff;}
-    .nodeSub{text-align:center;opacity:.75;font-size:12px;}
-    .vocabCard{padding:14px;border-radius:18px;background:rgba(255,255,255,.04);
-      border:1px solid rgba(255,255,255,.08);}
-    .vocabRow{display:flex;justify-content:space-between;align-items:center;gap:10px;}
-    .vocabEs{font-weight:900;font-size:18px;}
-    .vocabRu{opacity:.75;margin-top:4px;}
-    .vocabStat{text-align:right;}
-    .muted{opacity:.75;font-size:12px;}
+    </div>
   `;
-  document.head.appendChild(style);
-})();
+
+  $("btnSkip").style.display = "none";
+  $("btnCheck").style.display = "none";
+
+  setTimeout(() => {
+    $("btnFinishClose")?.addEventListener("click", () => {
+      closeLesson();
+      $("btnSkip").style.display = "";
+      $("btnCheck").style.display = "";
+      render();
+    });
+
+    $("btnFinishNext")?.addEventListener("click", () => {
+      const next = computeNextLessonId();
+      if (!next) {
+        showToast("Пока всё пройдено ✅");
+        closeLesson();
+        $("btnSkip").style.display = "";
+        $("btnCheck").style.display = "";
+        render();
+        return;
+      }
+
+      $("btnSkip").style.display = "";
+      $("btnCheck").style.display = "";
+      openLesson(next);
+      render();
+    });
+
+    // send stats to bot (not spammy)
+    if (isTelegramWebApp()) {
+      tgSendStats("lesson_complete");
+    }
+  }, 0);
+}
+
+function startPractice(hard = false) {
+  // practice picks random tasks from completed lessons (or all if none)
+  const completedIds = Object.keys(state.completed).filter(id => state.completed[id]);
+  let lessons = [];
+
+  if (completedIds.length) {
+    lessons = completedIds.map(id => lessonById(id)?.lesson).filter(Boolean);
+  } else {
+    // if nothing complete, use first A1 lesson
+    lessons = [lessonById("l1")?.lesson].filter(Boolean);
+  }
+
+  const tasks = lessons.flatMap(l => l.tasks.map(t => ({ ...t, _lesson: l.title })));
+  if (!tasks.length) return showToast("Пока нечего практиковать");
+
+  const pick = shuffle(tasks).slice(0, hard ? 8 : 5);
+
+  // open pseudo lesson
+  const pseudo = {
+    id: "practice",
+    title: hard ? "Практика • Хард" : "Практика",
+    xp: hard ? 18 : 12,
+    tasks: pick.map(t => ({
+      ...t,
+      q: `${t.q} <span style="opacity:.55;font-size:12px">(${t._lesson})</span>`
+    })),
+  };
+
+  lessonRuntime = {
+    lessonId: "__practice__",
+    lesson: pseudo,
+    idx: 0,
+    selected: null,
+    tilePool: [],
+    tilePick: [],
+    inputVal: "",
+    checked: false,
+    lastCorrect: null,
+  };
+
+  $("modal").classList.remove("hidden");
+  $("modalClose").onclick = closeLesson;
+  $("btnSkip").onclick = skipTask;
+  $("btnCheck").onclick = checkOrNext;
+  $("btnSkip").style.display = "";
+  $("btnCheck").style.display = "";
+
+  drawTask();
+}
+
+function startVocabReview(word) {
+  const w = word;
+  const pseudo = {
+    id: "vocab",
+    title: `Повторение • ${w}`,
+    xp: 10,
+    tasks: [
+      {
+        type: "input",
+        q: `Напиши слово: «${w}»`,
+        a: w,
+        placeholder: "введи то же слово…",
+        vocab: [w]
+      },
+      {
+        type: "mcq",
+        q: `Выбери слово: «${w}»`,
+        a: w,
+        options: shuffle([w, "hola", "gracias", "por favor", "adiós"]).slice(0, 4),
+        vocab: [w]
+      }
+    ]
+  };
+
+  lessonRuntime = {
+    lessonId: "__vocab__",
+    lesson: pseudo,
+    idx: 0,
+    selected: null,
+    tilePool: [],
+    tilePick: [],
+    inputVal: "",
+    checked: false,
+    lastCorrect: null,
+  };
+
+  $("modal").classList.remove("hidden");
+  $("modalClose").onclick = closeLesson;
+  $("btnSkip").onclick = skipTask;
+  $("btnCheck").onclick = checkOrNext;
+  $("btnSkip").style.display = "";
+  $("btnCheck").style.display = "";
+
+  drawTask();
+}
+
+/** ---------- init ---------- */
+function boot() {
+  tgReady();
+  render();
+
+  // daily/weekly sanity
+  touchActivity();
+  saveState();
+
+  // small note
+  if (isTelegramWebApp()) {
+    showToast("Telegram Mini App: OK ✅");
+  } else {
+    showToast("Локально: OK ✅");
+  }
+}
+boot();
