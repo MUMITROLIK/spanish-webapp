@@ -32,59 +32,42 @@
     </header>
 
     <!-- Tabs -->
-    <nav class="tabs">
-      <button class="tab isActive" data-go="home" type="button">🏠 Главная</button>
-      <button class="tab" data-go="path" type="button">🧭 Путь</button>
-      <button class="tab" data-go="practice" type="button">🎯 Практика</button>
-      <button class="tab" data-go="stats" type="button">📊 Статы</button>
-    </nav>
+    <nav class="tabs" aria-label="Навигация">
+  <button class="tab isActive" data-go="path" type="button">🧭 Путь</button>
+  <button class="tab" data-go="practice" type="button">🎯 Практика</button>
+  <button class="tab" data-go="stats" type="button">📊 Статы</button>
+  <button class="tab" data-go="settings" type="button">⚙️ Настройки</button>
+</nav>
+
 
     <!-- Screens -->
-    <main class="screens">
-      <!-- HOME -->
-      <section id="screenHome" class="screen isActive">
-        <div class="card hero">
-          <div class="heroTitle"><h1>Учись быстро, приятно и без духоты</h1></div>
-          <div class="heroSub">Кликаешь урок → проходишь задания → получаешь XP. Сердечек нет, лимитов нет 😁</div>
-
-          <div class="heroBtns">
-            <button id="btnContinue" class="btnPrimary" type="button">Продолжить</button>
-            <button id="btnSync" class="btnGhost" type="button">Синк в бота</button>
-            <button id="btnExport" class="btnGhost" type="button">Экспорт</button>
-            <button id="btnImport" class="btnGhost" type="button">Импорт</button>
-          </div>
-        </div>
-
-        <div class="card miniStats">
-          <div class="miniRow">
-            <div class="miniLabel">Цель дня</div>
-            <div class="miniValue"><span id="todayXp">0</span> / 50 XP</div>
-          </div>
-          <div class="miniRow">
-            <div class="miniLabel">Точность</div>
-            <div class="miniValue"><span id="acc">0</span>%</div>
-          </div>
-          <div class="miniRow">
-            <div class="miniLabel">Путь</div>
-            <div class="miniValue">Выбирай урок</div>
-          </div>
-
-          <div class="miniPills">
-            <div class="pill"><span class="pillIcon">⚡</span> <span id="homeEnergy">0</span></div>
-            <div class="pill"><span class="pillIcon">🔥</span> <span id="homeStreak">0</span></div>
-          </div>
-        </div>
-      </section>
+   
 
       <!-- PATH -->
-      <section id="screenPath" class="screen">
-        <div class="card">
-          <div class="cardTitle">Путь</div>
-          <div class="cardSub">Выбери урок и начни практику.</div>
-          <div id="pathList" class="pathList"></div>
-        </div>
-      </section>
+      <section id="screenPath" class="screen isActive">
+  <div class="card">
+    <div class="sectionKicker">ПУТЬ</div>
+    <h1 class="sectionTitle">Выбирай урок и учи по шагам</h1>
+    <div class="sectionSub">Уроки идут “змейкой”, как в Duolingo — слева/справа по порядку.</div>
 
+    <div id="pathMap" class="pathMap"></div>
+
+    <div class="pathBottom">
+      <div class="miniStats">
+        <div class="miniStat">
+          <div class="miniLabel">Сегодня</div>
+          <div class="miniValue"><span id="todayXp">0</span> XP</div>
+        </div>
+        <div class="miniStat">
+          <div class="miniLabel">Точность</div>
+          <div class="miniValue"><span id="acc">0</span>%</div>
+        </div>
+      </div>
+
+      <button id="btnContinue" class="btnPrimary" type="button">Продолжить</button>
+    </div>
+  </div>
+</section>
       <!-- PRACTICE -->
       <section id="screenPractice" class="screen">
         <div class="taskCard" id="taskCard">
@@ -143,6 +126,34 @@
       </section>
     </main>
   </div>
+    <section id="screenSettings" class="screen">
+  <div class="card">
+    <div class="sectionKicker">НАСТРОЙКИ</div>
+    <h1 class="sectionTitle">Настройки</h1>
+    <div class="sectionSub">Тут всё сервисное: синк, экспорт/импорт, голос и сброс.</div>
+
+    <div class="settingsGrid">
+      <button id="btnSync" class="btnGhost" type="button">Синк в бота</button>
+      <button id="btnExport" class="btnGhost" type="button">Экспорт</button>
+      <button id="btnImport" class="btnGhost" type="button">Импорт</button>
+    </div>
+
+    <div class="settingsBlock">
+      <div class="settingsRow">
+        <label class="settingsLabel" for="voiceSelect">Голос (если доступно)</label>
+        <select id="voiceSelect" class="settingsSelect"></select>
+      </div>
+
+      <label class="settingsCheck">
+        <input id="autoSpeak" type="checkbox" />
+        Авто-озвучка в аудио-заданиях
+      </label>
+    </div>
+
+    <button id="btnReset" class="btnDanger" type="button">Сбросить прогресс</button>
+  </div>
+</section>
+
 
   <!-- MODAL -->
   <div id="modal" class="modal hidden" aria-hidden="true">

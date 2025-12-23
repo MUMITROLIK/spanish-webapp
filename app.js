@@ -1,647 +1,896 @@
-/* =========================
-   Telegram + Storage helpers
-========================= */
+/* =========================================
+   Spanish WebApp — app.js (FULL)
+   ========================================= */
 
-// ✅ основной ключ (НЕ МЕНЯЙ, иначе “пропадёт прогресс”)
-const STORAGE_KEY = "spanish_trainer_progress_v1";
+/* ---------- Helpers ---------- */
 
-// ✅ если раньше был другой ключ — добавь сюда (миграция)
-const LEGACY_KEYS = [
-  "duo_like_progress_v1",
-  "spanish_trainer_progress",
-];
-
-function tg() {
-  return window.Telegram?.WebApp;
-}
-function hasCloudStorage() {
-  return !!tg()?.CloudStorage;
+function el(id) {
+  return document.getElementById(id);
 }
 
-function cloudGet(key) {
-  return new Promise((resolve) => {
-    try {
-      tg().CloudStorage.getItem(key, (err, value) => {
-        if (err) return resolve(null);
-        resolve(value ?? null);
-      });
-    } catch (_) {
-      resolve(null);
-    }
-  });
+function qs(sel, root = document) {
+  return root.querySelector(sel);
 }
 
-function cloudSet(key, value) {
-  return new Promise((resolve) => {
-    try {
-      tg().CloudStorage.setItem(key, value, () => resolve());
-    } catch (_) {
-      resolve();
-    }
-  });
+function qsa(sel, root = document) {
+  return Array.from(root.querySelectorAll(sel));
 }
 
-function safeParse(json) {
-  try { return JSON.parse(json); } catch { return null; }
+function on(target, event, handler) {
+  if (!target) return;
+  target.addEventListener(event, handler);
 }
 
-/* =========================
-   Dates + Progress model
-========================= */
-function todayKey() {
+function clamp(n, a, b) {
+  return Math.max(a, Math.min(b, n));
+}
+
+function todayKeyLocal() {
+  // YYYY-MM-DD in local time
   const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
-function yesterdayKey() {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
+/* ---------- Storage ---------- */
 
-function defaultProgress() {
-  return {
-    version: 1,
-    xpTotal: 0,
-    streak: 0,
-    answeredToday: 0,
-    correctToday: 0,
-    wordsLearned: 0,
-    completed: {},
-    vocab: {},
-    dayKey: todayKey(),
-    lastActive: todayKey(),
-    lastLessonId: "m1r1",
-  };
-}
+const PROGRESS_KEY = "spanish_webapp_progress_v2";
+const SETTINGS_KEY = "spanish_webapp_settings_v1";
 
-function ensureDay(prog) {
-  const t = todayKey();
-  if (prog.dayKey !== t) {
-    prog.dayKey = t;
-    prog.answeredToday = 0;
-    prog.correctToday = 0;
+const DAY_GOAL_XP = 50;
+
+const DEFAULT_PROGRESS = {
+  totalXP: 0,
+  streak: 0,
+  lastActiveDay: "",
+
+  // day stats
+  dayKey: "",
+  dayXP: 0,
+  answersToday: 0,
+  correctToday: 0,
+
+  // learning
+  learnedWords: {},
+
+  // practice state
+  inLesson: false,
+  lessonId: "lesson_1",
+  taskIndex: 0
+};
+
+function loadProgress() {
+  try {
+    const raw = localStorage.getItem(PROGRESS_KEY);
+    if (!raw) return { ...DEFAULT_PROGRESS };
+    const parsed = JSON.parse(raw);
+    return { ...DEFAULT_PROGRESS, ...parsed };
+  } catch {
+    return { ...DEFAULT_PROGRESS };
   }
 }
 
-/* =========================
-   ✅ Robust load/save (Cloud + Local mirror)
-========================= */
-function localGet(key) {
-  try { return localStorage.getItem(key); } catch { return null; }
-}
-function localSet(key, value) {
-  try { localStorage.setItem(key, value); } catch {}
+function saveProgress() {
+  localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
 }
 
-async function loadProgress() {
-  if (hasCloudStorage()) {
-    const cloudRaw = await cloudGet(STORAGE_KEY);
-    const cloudObj = cloudRaw ? safeParse(cloudRaw) : null;
-    if (cloudObj) return cloudObj;
+function resetDayIfNeeded() {
+  const tk = todayKeyLocal();
+  if (progress.dayKey !== tk) {
+    progress.dayKey = tk;
+    progress.dayXP = 0;
+    progress.answersToday = 0;
+    progress.correctToday = 0;
+  }
+}
+
+/* ---------- Settings (TTS) ---------- */
+
+let settings = loadSettings();
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return { autoSpeak: false, voiceURI: "" };
+    const parsed = JSON.parse(raw);
+    return {
+      autoSpeak: !!parsed.autoSpeak,
+      voiceURI: typeof parsed.voiceURI === "string" ? parsed.voiceURI : ""
+    };
+  } catch {
+    return { autoSpeak: false, voiceURI: "" };
+  }
+}
+
+function saveSettings() {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+}
+
+/* ---------- TTS (speechSynthesis) ---------- */
+
+let cachedVoices = []; // ONLY ONCE
+let voicesReady = false;
+
+function getVoicesSafe() {
+  try {
+    if (!("speechSynthesis" in window)) return [];
+    return window.speechSynthesis.getVoices() || [];
+  } catch {
+    return [];
+  }
+}
+
+function refreshVoices() {
+  cachedVoices = getVoicesSafe();
+  voicesReady = cachedVoices.length > 0;
+}
+
+function pickSpanishVoice() {
+  const voices = cachedVoices.length ? cachedVoices : getVoicesSafe();
+  if (!voices.length) return null;
+
+  // 1) user chosen
+  if (settings.voiceURI) {
+    const exact = voices.find(v => v.voiceURI === settings.voiceURI);
+    if (exact) return exact;
   }
 
-  const localRaw = localGet(STORAGE_KEY);
-  const localObj = localRaw ? safeParse(localRaw) : null;
-  if (localObj) return localObj;
+  // 2) lang starts with es
+  const esByLang = voices.find(v => (v.lang || "").toLowerCase().startsWith("es"));
+  if (esByLang) return esByLang;
 
-  for (const k of LEGACY_KEYS) {
-    if (hasCloudStorage()) {
-      const raw = await cloudGet(k);
-      const obj = raw ? safeParse(raw) : null;
-      if (obj) return obj;
-    }
-    const raw2 = localGet(k);
-    const obj2 = raw2 ? safeParse(raw2) : null;
-    if (obj2) return obj2;
-  }
+  // 3) by name fallback
+  const esByName = voices.find(v => {
+    const name = (v.name || "").toLowerCase();
+    return name.includes("spanish") || name.includes("español") || name.includes("espanol");
+  });
+  if (esByName) return esByName;
 
-  return defaultProgress();
+  // 4) any
+  return voices[0];
 }
 
-async function saveProgress(prog) {
-  const raw = JSON.stringify(prog);
-  localSet(STORAGE_KEY, raw);
-  if (hasCloudStorage()) await cloudSet(STORAGE_KEY, raw);
+function initTTS() {
+  if (!("speechSynthesis" in window)) return;
+  refreshVoices();
+  window.speechSynthesis.onvoiceschanged = () => refreshVoices();
 }
 
-/* =========================
-   Lessons + Tasks (логично для испанского)
-   UI русский, ответы/слова — испанский
-========================= */
-const LESSONS = [
-  { id: "m1r1", title: "Урок 1: База", sub: "3 задания · быстро · без лимитов", xp: 30 },
-];
+function speakText(text, opts = {}) {
+  if (!("speechSynthesis" in window)) return;
+  if (!text || typeof text !== "string") return;
 
-const TASKS = [
-  {
-    label: "ПЕРЕВОД",
-    title: "Собери перевод на испанский",
-    prompt: "Франция и Мексика.",
-    say: "Francia y México.",
-    words: ["Francia", "y", "México"],
-    correct: ["Francia", "y", "México"],
-    hidePromptInAudio: false,
-  },
-  {
-    label: "ЗАКОНЧИ ФРАЗУ",
-    title: "Выбери правильное слово",
-    prompt: "Sí, yo soy de __.",
-    say: "Sí, yo soy de Francia.",
-    words: ["Francia", "México", "taco", "gracias", "chao"],
-    correct: ["Francia"],
-    hidePromptInAudio: false,
-  },
-  {
-    label: "АУДИО",
-    title: "Что вы услышали?",
-    prompt: "Нажми 🔊 и собери фразу 👂",
-    say: "Yo soy Ana, encantada.",
-    words: ["Yo", "soy", "Ana", "encantada", "helado", "tú"],
-    correct: ["Yo", "soy", "Ana", "encantada"],
-    hidePromptInAudio: true,
-  }
-];
+  const { rate = 1, pitch = 1, volume = 1 } = opts;
 
-/* =========================
-   UI helpers
-========================= */
-const el = (id) => document.getElementById(id);
+  try { window.speechSynthesis.cancel(); } catch {}
+
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "es-ES";
+  u.rate = clamp(rate, 0.6, 1.4);
+  u.pitch = clamp(pitch, 0.6, 1.4);
+  u.volume = clamp(volume, 0, 1);
+
+  const voice = pickSpanishVoice();
+  if (voice) u.voice = voice;
+
+  window.speechSynthesis.speak(u);
+}
+
+/* ---------- Telegram WebApp (optional) ---------- */
+
+function isTelegramWebApp() {
+  return typeof window.Telegram !== "undefined" &&
+         window.Telegram &&
+         window.Telegram.WebApp;
+}
+
+function tgHaptic(type = "impact") {
+  if (!isTelegramWebApp()) return;
+  try {
+    const h = window.Telegram.WebApp.HapticFeedback;
+    if (!h) return;
+    if (type === "success") h.notificationOccurred("success");
+    else if (type === "error") h.notificationOccurred("error");
+    else h.impactOccurred("light");
+  } catch {}
+}
+
+/* ---------- App State ---------- */
+
+let progress = loadProgress();
+resetDayIfNeeded();
 
 const screens = {
   home: el("screenHome"),
   path: el("screenPath"),
   practice: el("screenPractice"),
   stats: el("screenStats"),
+  settings: el("screenSettings") // optional if you add later
 };
 
-function setActiveScreen(name) {
-  Object.entries(screens).forEach(([k, node]) => {
-    node.classList.toggle("isActive", k === name);
-  });
+let currentScreen = "home";
 
-  document.querySelectorAll(".tab").forEach(btn => {
-    btn.classList.toggle("isActive", btn.dataset.go === name);
-  });
-}
-
-function animateTaskSwap(fnRender) {
-  const card = el("taskCard");
-  card.classList.add("taskSwapOut");
-  setTimeout(() => {
-    fnRender();
-    requestAnimationFrame(() => {
-      card.classList.remove("taskSwapOut");
-    });
-  }, 180);
-}
-
-/* =========================
-   Modal
-========================= */
-const modal = el("modal");
-const modalTitle = el("modalTitle");
-const modalBody = el("modalBody");
-const modalOk = el("modalOk");
-const modalCancel = el("modalCancel");
-const modalX = el("modalX");
-
-let modalResolver = null;
-
-function openModal({ title, body, okText = "Ок", cancelText = "Отмена", showCancel = true }) {
-  modalTitle.textContent = title || "Сообщение";
-  modalBody.textContent = body || "";
-  modalOk.textContent = okText;
-  modalCancel.textContent = cancelText;
-  modalCancel.style.display = showCancel ? "" : "none";
-
-  document.body.classList.add("modalOpen");
-  modal.classList.remove("hidden");
-
-  return new Promise((resolve) => {
-    modalResolver = resolve;
-  });
-}
-
-function closeModal(result) {
-  modal.classList.add("hidden");
-  document.body.classList.remove("modalOpen");
-  if (modalResolver) {
-    modalResolver(result);
-    modalResolver = null;
-  }
-}
-
-modalOk.addEventListener("click", () => closeModal(true));
-modalCancel.addEventListener("click", () => closeModal(false));
-modalX.addEventListener("click", () => closeModal(false));
-modal.addEventListener("click", (e) => {
-  if (e.target === modal) closeModal(false);
-});
-
-/* =========================
-   Result sheet (Duolingo-like)
-========================= */
-const resultSheet = el("resultSheet");
-const resultTitle = el("resultTitle");
-const resultSub = el("resultSub");
-const btnResultNext = el("btnResultNext");
-const confettiBox = el("confetti");
-
-let lastAnswerWasCorrect = false;
-
-function clearConfetti(){
-  confettiBox.innerHTML = "";
-}
-function fireConfetti(){
-  clearConfetti();
-  const pieces = 18;
-  for (let i = 0; i < pieces; i++) {
-    const p = document.createElement("div");
-    p.className = "confettiPiece";
-    p.style.left = Math.random() * 100 + "%";
-    p.style.background = `hsl(${Math.floor(Math.random()*360)}, 90%, 60%)`;
-    p.style.animationDelay = (Math.random() * 0.10) + "s";
-    confettiBox.appendChild(p);
-  }
-  setTimeout(clearConfetti, 1100);
-}
-
-function showResultSheet({ ok, title, sub }) {
-  resultSheet.classList.toggle("good", ok);
-  resultSheet.classList.toggle("bad", !ok);
-
-  resultTitle.textContent = title;
-  resultSub.textContent = sub;
-
-  // ✅ чтобы “ПРОВЕРИТЬ” не торчала под шторкой
-  el("btnCheck").style.visibility = "hidden";
-
-  resultSheet.classList.remove("hidden");
-  if (ok) fireConfetti();
-}
-
-function hideResultSheet() {
-  resultSheet.classList.add("hidden");
-  el("btnCheck").style.visibility = "visible";
-}
-
-/* =========================
-   TTS (speechSynthesis)
-========================= */
-let cachedVoices = [];
-let voicesReady = false;
-
-function refreshVoices() {
-  try {
-    cachedVoices = window.speechSynthesis?.getVoices?.() || [];
-    voicesReady = cachedVoices.length > 0;
-  } catch {
-    cachedVoices = [];
-    voicesReady = false;
-  }
-}
-
-if ("speechSynthesis" in window) {
-  refreshVoices();
-  window.speechSynthesis.onvoiceschanged = () => refreshVoices();
-}
-
-function pickSpanishVoice() {
-  if (!cachedVoices.length) return null;
-
-  const prefer = cachedVoices.find(v => /es(-|_)?(ES|MX|US)?/i.test(v.lang) && /Google|Microsoft|Siri|Natural/i.test(v.name));
-  if (prefer) return prefer;
-
-  const anyEs = cachedVoices.find(v => /^es/i.test(v.lang));
-  if (anyEs) return anyEs;
-
-  return cachedVoices[0] || null;
-}
-
-function speak(text) {
-  if (!("speechSynthesis" in window)) return;
-
-  // ✅ важно: Telegram иногда “накладывает” фразы, поэтому cancel
-  try { window.speechSynthesis.cancel(); } catch {}
-
-  const u = new SpeechSynthesisUtterance(text);
-  const v = pickSpanishVoice();
-  if (v) u.voice = v;
-
-  // легкая настройка (можно подкрутить)
-  u.rate = 0.95;
-  u.pitch = 1.0;
-
-  window.speechSynthesis.speak(u);
-}
-
-/* =========================
-   Practice logic
-========================= */
-let progress = defaultProgress();
-
+// Practice runtime
+let lesson = null;
 let taskIndex = 0;
-let currentTask = TASKS[0];
-let picked = [];
-const DAILY_GOAL_XP = 50;
 
-function calcAcc() {
-  return progress.answeredToday
-    ? Math.round((progress.correctToday / progress.answeredToday) * 100)
-    : 0;
+let picked = [];      // picked chips
+let pool = [];        // remaining chips
+let lastAnswerWasCorrect = false;
+let currentTask = null;
+
+/* ---------- Lesson Data (demo) ---------- */
+/*
+  Ты потом легко расширишь: добавляй уроки/уровни/спираль.
+  Сейчас 1 урок = 3 задания.
+*/
+
+const LESSONS = {
+  lesson_1: {
+    id: "lesson_1",
+    title: "Урок 1: База",
+    subtitle: "3 задания • быстро • без лимитов",
+    tasks: [
+      {
+        type: "translate",
+        title: "ПЕРЕВОД",
+        subtitle: "Собери перевод на испанский",
+        promptRu: "Франция и Мексика.",
+        phraseEs: "Francia y México.",
+        chips: ["Francia", "y", "México"],
+        speak: "Francia y México."
+      },
+      {
+        type: "choose",
+        title: "ЗАКОНЧИ ФРАЗУ",
+        subtitle: "Выбери правильное слово",
+        promptEs: "Sí, yo soy de __.",
+        correct: "Francia",
+        options: ["Francia", "México", "taco", "gracias", "chao"],
+        speak: "Sí, yo soy de Francia."
+      },
+      {
+        type: "audio",
+        title: "АУДИО",
+        subtitle: "Нажми 🔊 и собери фразу",
+        promptHint: "Нажми 🔊 и собери фразу 👂",
+        phraseEs: "Yo soy Ana, encantada.",
+        chips: ["Yo", "soy", "Ana", "encantada"],
+        noise: ["helado", "tú"],
+        speak: "Yo soy Ana, encantada."
+      }
+    ]
+  }
+};
+
+function getLessonById(id) {
+  return LESSONS[id] || LESSONS.lesson_1;
 }
 
-function renderTop() {
-  el("xpTotal").textContent = String(progress.xpTotal);
-  el("streak").textContent = String(progress.streak);
+/* ---------- UI: Tabs & Screens ---------- */
 
-  // “энергия” просто как декор
-  el("energy").textContent = String(25);
-  el("homeEnergy").textContent = String(25);
+function goScreen(name) {
+  currentScreen = name;
 
-  el("homeStreak").textContent = String(progress.streak);
+  // hide all
+  Object.values(screens).forEach(sec => {
+    if (sec) sec.classList.remove("isActive");
+  });
 
-  el("todayXp").textContent = String(progress.correctToday * 10);
-  el("acc").textContent = String(calcAcc());
+  // show chosen
+  const sec = screens[name];
+  if (sec) sec.classList.add("isActive");
 
-  el("sXp").textContent = String(progress.xpTotal);
-  el("sStreak").textContent = String(progress.streak);
-  el("sAnswered").textContent = String(progress.answeredToday);
-  el("sAcc").textContent = `${calcAcc()}%`;
-  el("sWords").textContent = String(progress.wordsLearned);
+  // set active tab style
+  qsa("nav.tabs .tab").forEach(btn => btn.classList.remove("isActive"));
+  const tabBtn = qs(`nav.tabs .tab[data-go="${name}"]`);
+  if (tabBtn) tabBtn.classList.add("isActive");
 
-  // progress bar = цель дня
-  const todayXp = progress.correctToday * 10;
-  const fill = Math.max(0, Math.min(100, Math.round((todayXp / DAILY_GOAL_XP) * 100)));
-  el("barFill").style.width = `${fill}%`;
+  // screen enter hooks
+  if (name === "home") renderHome();
+  if (name === "path") renderPath();
+  if (name === "stats") renderStats();
+  if (name === "practice") {
+    // если пришли в practice без урока — стартуем урок
+    if (!progress.inLesson) startLesson(progress.lessonId || "lesson_1");
+    else resumeLesson();
+  }
+
+  saveProgress();
+}
+
+function bindTabs() {
+  qsa("nav.tabs .tab").forEach(btn => {
+    on(btn, "click", () => {
+      const target = btn.dataset.go;
+      if (!target) return;
+      goScreen(target);
+    });
+  });
+}
+
+/* ---------- UI: Home / Path / Stats ---------- */
+
+function renderHome() {
+  resetDayIfNeeded();
+
+  // Mini stats (если есть id в HTML)
+  if (el("todayXp")) el("todayXp").textContent = String(progress.dayXP);
+  if (el("todayGoal")) el("todayGoal").textContent = String(DAY_GOAL_XP);
+
+  if (el("miniAccuracy")) {
+    const acc = progress.answersToday ? Math.round((progress.correctToday / progress.answersToday) * 100) : 0;
+    el("miniAccuracy").textContent = `${acc}%`;
+  }
+
+  // optional
+  if (el("miniPathValue")) el("miniPathValue").textContent = "1";
+  if (el("miniLessonValue")) el("miniLessonValue").textContent = "1";
 }
 
 function renderPath() {
-  const list = el("pathList");
-  list.innerHTML = "";
+  const l = getLessonById("lesson_1");
 
-  LESSONS.forEach(l => {
-    const div = document.createElement("div");
-    div.className = "pathItem";
-    div.innerHTML = `
-      <div>
-        <div class="pathName">${l.title}</div>
-        <div class="pathSub">${l.sub}</div>
-      </div>
-      <button class="btnPrimary" style="padding:12px 18px;">Начать</button>
-    `;
-    div.addEventListener("click", async () => {
-      const ok = await openModal({
-        title: l.title,
-        body: `Начать урок сейчас?`,
-        okText: "НАЧАТЬ",
-        cancelText: "Отмена"
-      });
-      if (!ok) return;
+  // Если у тебя в HTML есть элементы для урока — заполним.
+  if (el("pathLessonTitle")) el("pathLessonTitle").textContent = l.title;
+  if (el("pathLessonSub")) el("pathLessonSub").textContent = l.subtitle;
 
-      progress.lastLessonId = l.id;
-      await saveProgress(progress);
-
-      startPractice();
-    });
-    list.appendChild(div);
-  });
+  // Кнопка "Начать" обычно есть — попробуем несколько id
+  const btnStart = el("btnStartLesson") || el("btnStart") || qs('[data-action="startLesson"]');
+  if (btnStart) btnStart.disabled = false;
 }
 
-function setCheckEnabled() {
-  el("btnCheck").disabled = picked.length === 0;
+function renderStats() {
+  resetDayIfNeeded();
+
+  if (el("statTotalXP")) el("statTotalXP").textContent = String(progress.totalXP);
+  if (el("statStreak")) el("statStreak").textContent = String(progress.streak);
+  if (el("statAnswersToday")) el("statAnswersToday").textContent = String(progress.answersToday);
+
+  const acc = progress.answersToday ? Math.round((progress.correctToday / progress.answersToday) * 100) : 0;
+  if (el("statAccuracyToday")) el("statAccuracyToday").textContent = `${acc}%`;
+
+  const learnedCount = Object.keys(progress.learnedWords || {}).length;
+  if (el("statLearned")) el("statLearned").textContent = String(learnedCount);
 }
 
-function renderAnswer() {
-  const area = el("answerArea");
-  area.innerHTML = "";
+/* ---------- XP & Streak ---------- */
 
-  if (picked.length === 0) {
-    area.textContent = "Нажимай на слова ниже 👇";
+function touchStreak() {
+  const today = todayKeyLocal();
+  if (progress.lastActiveDay === today) return;
+
+  // yesterday check
+  const d = new Date();
+  const todayDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const yesterdayDate = new Date(todayDate.getTime() - 86400000);
+  const yKey = `${yesterdayDate.getFullYear()}-${String(yesterdayDate.getMonth() + 1).padStart(2, "0")}-${String(yesterdayDate.getDate()).padStart(2, "0")}`;
+
+  if (progress.lastActiveDay === yKey) progress.streak = (progress.streak || 0) + 1;
+  else progress.streak = 1;
+
+  progress.lastActiveDay = today;
+}
+
+function addXP(xp) {
+  resetDayIfNeeded();
+  touchStreak();
+
+  progress.totalXP = (progress.totalXP || 0) + xp;
+  progress.dayXP = (progress.dayXP || 0) + xp;
+
+  saveProgress();
+  renderHome();
+  renderStats();
+}
+
+/* ---------- Result Sheet (Потрясающе + Далее) ---------- */
+
+function showResultSheet({ ok, title, sub }) {
+  const sheet = el("resultSheet");
+  const t = el("resultTitle");
+  const s = el("resultSub");
+
+  // Если у тебя нет resultSheet в HTML — просто показываем feedback
+  if (!sheet) {
+    const fb = el("feedback");
+    if (fb) {
+      fb.textContent = title || (ok ? "Потрясающе!" : "Попробуй ещё раз");
+      fb.classList.toggle("good", !!ok);
+      fb.classList.toggle("bad", !ok);
+    }
     return;
   }
 
-  picked.forEach((w, idx) => {
-    const t = document.createElement("div");
-    t.className = "answerToken";
-    t.textContent = w;
-    t.addEventListener("click", () => {
-      picked.splice(idx, 1);
-      renderTaskRebuildChips();
-    });
-    area.appendChild(t);
-  });
+  sheet.classList.toggle("good", !!ok);
+  sheet.classList.toggle("bad", !ok);
+
+  if (t) t.textContent = title || (ok ? "Потрясающе!" : "Ошибка");
+  if (s) s.textContent = sub || "";
+
+  sheet.classList.remove("hidden");
+
+  // прячем кнопку "Проверить", чтобы не наезжало
+  if (el("btnCheck")) el("btnCheck").style.visibility = "hidden";
+
+  if (ok) {
+    tgHaptic("success");
+    try { fireConfetti(); } catch {}
+  } else {
+    tgHaptic("error");
+  }
 }
 
-function renderTaskRebuildChips(){
-  const chips = el("chips");
-  chips.innerHTML = "";
+function hideResultSheet() {
+  const sheet = el("resultSheet");
+  if (sheet) sheet.classList.add("hidden");
+  if (el("btnCheck")) el("btnCheck").style.visibility = "visible";
 
-  currentTask.words.forEach(w => {
-    const b = document.createElement("button");
-    b.className = "chip";
-    b.textContent = w;
+  const fb = el("feedback");
+  if (fb) fb.textContent = "";
+}
 
-    // если слово уже выбрано столько же раз — дизейблим
-    const usedCount = picked.filter(x => x === w).length;
-    if (usedCount > 0) {
-      b.disabled = true;
-      b.style.opacity = ".45";
-    }
+/* ---------- Practice Engine ---------- */
 
-    b.addEventListener("click", () => {
-      picked.push(w);
-      renderTaskRebuildChips();
-    });
+function resetPracticeUI() {
+  hideResultSheet();
 
-    chips.appendChild(b);
-  });
+  picked = [];
+  pool = [];
+  lastAnswerWasCorrect = false;
+  currentTask = null;
 
-  renderAnswer();
-  setCheckEnabled();
+  if (el("pickedRow")) el("pickedRow").innerHTML = "";
+  if (el("chipPool")) el("chipPool").innerHTML = "";
+
+  if (el("btnNext")) el("btnNext").disabled = true;
+  if (el("btnCheck")) el("btnCheck").disabled = true;
+
+  const fb = el("feedback");
+  if (fb) fb.textContent = "";
+}
+
+function startLesson(lessonId) {
+  progress.inLesson = true;
+  progress.lessonId = lessonId;
+  progress.taskIndex = 0;
+
+  lesson = getLessonById(lessonId);
+  taskIndex = 0;
+
+  resetPracticeUI();
+  goScreen("practice");
+  renderTask();
+}
+
+function resumeLesson() {
+  lesson = getLessonById(progress.lessonId || "lesson_1");
+  taskIndex = progress.taskIndex || 0;
+
+  resetPracticeUI();
+  renderTask();
+}
+
+function finishLesson() {
+  progress.inLesson = false;
+  progress.taskIndex = 0;
+  saveProgress();
+
+  // Если у тебя есть модалка "урок завершён" — покажем, иначе просто в путь
+  const modal = el("lessonDoneModal");
+  if (modal) {
+    modal.classList.remove("hidden");
+  } else {
+    goScreen("path");
+  }
 }
 
 function renderTask() {
-  hideResultSheet();
+  resetDayIfNeeded();
 
-  currentTask = TASKS[taskIndex];
+  const tasks = lesson?.tasks || [];
+  if (taskIndex >= tasks.length) {
+    finishLesson();
+    return;
+  }
+
+  currentTask = tasks[taskIndex];
+  progress.taskIndex = taskIndex;
+  saveProgress();
+
+  // Headers
+  if (el("taskTitle")) el("taskTitle").textContent = currentTask.title || "";
+  if (el("taskSubtitle")) el("taskSubtitle").textContent = currentTask.subtitle || "";
+
+  // Prompt text
+  const prompt = el("promptText");
+  if (prompt) {
+    if (currentTask.type === "translate") {
+      prompt.textContent = currentTask.promptRu || "";
+    } else if (currentTask.type === "choose") {
+      prompt.textContent = currentTask.promptEs || "";
+    } else if (currentTask.type === "audio") {
+      prompt.textContent = currentTask.promptHint || "Нажми 🔊 и собери фразу 👂";
+    } else {
+      prompt.textContent = "";
+    }
+  }
+
+  // Audio button
+  const btnAudio = el("btnAudio") || qs('[data-action="audio"]');
+  if (btnAudio) {
+    btnAudio.disabled = false;
+  }
+
+  // Build chips
+  resetPracticeUI();
+  buildTaskChips(currentTask);
+
+  // Auto speak (optional)
+  if (settings.autoSpeak && currentTask.speak) {
+    speakText(currentTask.speak, { rate: 1 });
+  }
+}
+
+function buildTaskChips(task) {
+  const poolWrap = el("chipPool");
+  const pickedWrap = el("pickedRow");
+
+  // fallback if HTML uses other ids
+  const poolAlt = qs('[data-role="chipPool"]');
+  const pickedAlt = qs('[data-role="pickedRow"]');
+
+  const poolEl = poolWrap || poolAlt;
+  const pickedEl = pickedWrap || pickedAlt;
+
+  if (!poolEl || !pickedEl) return;
+
   picked = [];
+  pool = [];
 
-  el("taskLabel").textContent = currentTask.label;
-  el("taskTitle").textContent = currentTask.title;
-  el("promptText").textContent = currentTask.prompt;
+  if (task.type === "translate") {
+    pool = [...task.chips];
+  } else if (task.type === "choose") {
+    pool = [...task.options];
+  } else if (task.type === "audio") {
+    pool = [...task.chips, ...(task.noise || [])];
+  } else {
+    pool = [];
+  }
 
-  el("feedback").textContent = "";
-  el("btnCheck").disabled = true;
+  // shuffle pool a bit (simple)
+  pool = pool
+    .map(v => ({ v, r: Math.random() }))
+    .sort((a, b) => a.r - b.r)
+    .map(x => x.v);
 
-  renderTaskRebuildChips();
+  renderChips(poolEl, pickedEl);
+  updateButtonsState();
 }
 
-function applyCorrectReward() {
-  progress.xpTotal += 10;
-  progress.correctToday += 1;
-  progress.wordsLearned += 1;
+function renderChips(poolEl, pickedEl) {
+  poolEl.innerHTML = "";
+  pickedEl.innerHTML = "";
 
-  const t = todayKey();
-  const y = yesterdayKey();
+  // picked
+  picked.forEach((word, idx) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chip picked";
+    chip.textContent = word;
 
-  // streak: если вчера был активен → +1, иначе начинаем заново
-  if (progress.lastActive === y) progress.streak = (progress.streak || 0) + 1;
-  else if (progress.lastActive !== t) progress.streak = 1;
+    on(chip, "click", () => {
+      // remove from picked -> back to pool
+      picked.splice(idx, 1);
+      pool.push(word);
+      renderChips(poolEl, pickedEl);
+      updateButtonsState();
+    });
 
-  progress.lastActive = t;
+    pickedEl.appendChild(chip);
+  });
+
+  // pool
+  pool.forEach((word, idx) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chip";
+    chip.textContent = word;
+
+    on(chip, "click", () => {
+      pool.splice(idx, 1);
+      picked.push(word);
+      renderChips(poolEl, pickedEl);
+      updateButtonsState();
+    });
+
+    poolEl.appendChild(chip);
+  });
 }
 
-async function checkAnswer() {
-  ensureDay(progress);
-  progress.answeredToday += 1;
+function updateButtonsState() {
+  const btnCheck = el("btnCheck");
+  const btnNext = el("btnNext");
 
-  const ok = JSON.stringify(picked) === JSON.stringify(currentTask.correct);
+  if (btnNext) btnNext.disabled = true;
+
+  if (!btnCheck) return;
+
+  if (!currentTask) {
+    btnCheck.disabled = true;
+    return;
+  }
+
+  if (currentTask.type === "choose") {
+    // for choose: allow check after 1 pick
+    btnCheck.disabled = picked.length !== 1;
+  } else {
+    // for translate/audio: allow check after at least 1 word
+    btnCheck.disabled = picked.length === 0;
+  }
+}
+
+/* ---------- Check Answer ---------- */
+
+function checkAnswer() {
+  if (!currentTask) return;
+
+  const btnNext = el("btnNext");
+  const btnCheck = el("btnCheck");
+
+  // update stats counters
+  progress.answersToday = (progress.answersToday || 0) + 1;
+
+  let ok = false;
+  let gainedXP = 0;
+
+  if (currentTask.type === "translate") {
+    const answer = picked.join(" ").trim();
+    ok = answer === currentTask.phraseEs.replace(".", "").trim() ||
+         answer + "." === currentTask.phraseEs.trim();
+    gainedXP = ok ? 10 : 0;
+
+    if (ok) {
+      // learned words
+      currentTask.chips.forEach(w => progress.learnedWords[w.toLowerCase()] = true);
+    }
+  }
+
+  if (currentTask.type === "choose") {
+    ok = picked[0] === currentTask.correct;
+    gainedXP = ok ? 10 : 0;
+
+    if (ok) {
+      progress.learnedWords[(currentTask.correct || "").toLowerCase()] = true;
+    }
+  }
+
+  if (currentTask.type === "audio") {
+    const answer = picked.join(" ").trim();
+    ok = answer === currentTask.phraseEs.replace(".", "").trim() ||
+         answer + "." === currentTask.phraseEs.trim();
+    gainedXP = ok ? 10 : 0;
+
+    if (ok) {
+      currentTask.chips.forEach(w => progress.learnedWords[w.toLowerCase()] = true);
+    }
+  }
+
+  if (ok) progress.correctToday = (progress.correctToday || 0) + 1;
+
+  saveProgress();
+  renderStats();
+  renderHome();
+
   lastAnswerWasCorrect = ok;
 
-  // ✅ блокируем кнопку проверки до “ДАЛЕЕ”
-  el("btnCheck").disabled = true;
+  if (btnCheck) btnCheck.disabled = true;
+  if (btnNext) btnNext.disabled = !ok; // дальше — только если ок
 
-  if (ok) {
-    applyCorrectReward();
-    showResultSheet({
-      ok: true,
-      title: "Потрясающе! ✅",
-      sub: "+10 XP"
-    });
-  } else {
-    showResultSheet({
-      ok: false,
-      title: "Почти 😅",
-      sub: "Попробуй ещё раз"
-    });
-  }
+  if (ok) addXP(gainedXP);
 
-  renderTop();
-  await saveProgress(progress);
+  const title = ok ? "Потрясающе!" : "Почти. Попробуй ещё раз 🙂";
+  const sub = ok ? `+${gainedXP} XP` : "";
+
+  showResultSheet({ ok, title, sub });
 }
 
-async function onResultNext() {
+/* ---------- Next Task ---------- */
+
+function nextTask() {
   hideResultSheet();
 
-  if (!lastAnswerWasCorrect) {
-    // остаёмся на текущем задании
-    setCheckEnabled();
-    return;
+  if (lastAnswerWasCorrect) {
+    taskIndex += 1;
+    progress.taskIndex = taskIndex;
+    saveProgress();
+    renderTask();
+  } else {
+    // если ошибка — оставляем задание, просто разрешаем снова проверять
+    if (el("btnCheck")) el("btnCheck").disabled = picked.length === 0;
+    if (el("btnNext")) el("btnNext").disabled = true;
   }
-
-  // ✅ правильный ответ → следующий шаг
-  taskIndex += 1;
-
-  // конец урока
-  if (taskIndex >= TASKS.length) {
-    taskIndex = 0;
-
-    const goPath = await openModal({
-      title: "Урок завершён 🎉",
-      body: "Перейти в «Путь» или на «Главную»?",
-      okText: "В Путь",
-      cancelText: "На главную",
-      showCancel: true
-    });
-
-    setActiveScreen(goPath ? "path" : "home");
-    return;
-  }
-
-  animateTaskSwap(() => renderTask());
 }
 
-function startPractice() {
-  taskIndex = 0;
-  setActiveScreen("practice");
-  animateTaskSwap(() => renderTask());
+/* ---------- Audio Click ---------- */
+
+function playCurrentAudio() {
+  if (!currentTask) return;
+  const text = currentTask.speak || currentTask.phraseEs || "";
+  if (!text) return;
+  speakText(text, { rate: 1 });
 }
 
-/* =========================
-   App init
-========================= */
-async function init() {
-  const TG = tg();
-  if (TG) {
-    TG.ready();
-    TG.expand();
+/* ---------- Import/Export ---------- */
+
+function exportJSON() {
+  const payload = {
+    progress,
+    settings
+  };
+
+  const json = JSON.stringify(payload, null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "spanish_webapp_backup.json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  setTimeout(() => URL.revokeObjectURL(url), 500);
+}
+
+function importJSON() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "application/json";
+
+  input.onchange = async () => {
+    const file = input.files && input.files[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+
+      if (parsed.progress) {
+        progress = { ...DEFAULT_PROGRESS, ...parsed.progress };
+        resetDayIfNeeded();
+        saveProgress();
+      }
+
+      if (parsed.settings) {
+        settings = {
+          autoSpeak: !!parsed.settings.autoSpeak,
+          voiceURI: typeof parsed.settings.voiceURI === "string" ? parsed.settings.voiceURI : ""
+        };
+        saveSettings();
+      }
+
+      // Refresh UI
+      renderHome();
+      renderPath();
+      renderStats();
+
+      alert("Импорт успешно ✅");
+    } catch (e) {
+      console.error(e);
+      alert("Не получилось импортировать файл ❌");
+    }
+  };
+
+  input.click();
+}
+
+function syncToBot() {
+  // Пока без реального бэкенда: просто копируем JSON в буфер
+  const payload = { progress, settings };
+  const text = JSON.stringify(payload);
+
+  navigator.clipboard?.writeText(text)
+    .then(() => alert("Данные скопированы ✅\n(позже подключим реальный синк в бота)"))
+    .catch(() => alert("Не удалось скопировать 😕"));
+}
+
+/* ---------- Confetti (optional) ---------- */
+
+function fireConfetti() {
+  // Если у тебя уже есть конфетти — оно отработает.
+  // Если нет — просто ничего не будет.
+  if (typeof window.confetti === "function") {
+    window.confetti({ particleCount: 80, spread: 60, origin: { y: 0.8 } });
   }
+}
 
-  progress = await loadProgress();
-  ensureDay(progress);
-  await saveProgress(progress);
+/* ---------- Buttons Binding ---------- */
 
-  renderTop();
-  renderPath();
-
-  document.querySelectorAll(".tab").forEach(btn => {
-    btn.addEventListener("click", () => setActiveScreen(btn.dataset.go));
+function bindHomeButtons() {
+  on(el("btnContinue"), "click", () => {
+    // Если мы в уроке — идём в practice, иначе в путь
+    if (progress.inLesson) goScreen("practice");
+    else goScreen("path");
   });
 
-  el("btnContinue").addEventListener("click", startPractice);
-  el("btnCheck").addEventListener("click", checkAnswer);
+  on(el("btnExport"), "click", exportJSON);
+  on(el("btnImport"), "click", importJSON);
+  on(el("btnSync"), "click", syncToBot);
+}
 
-  el("btnAudio").addEventListener("click", () => {
-    const text = currentTask?.say || "";
-    if (!text) return;
+function bindPathButtons() {
+  const btnStart = el("btnStartLesson") || el("btnStart") || qs('[data-action="startLesson"]');
+  on(btnStart, "click", () => startLesson("lesson_1"));
+}
 
-    // если voices ещё не подгрузились — подождём чуть-чуть
-    if (!voicesReady) refreshVoices();
+function bindPracticeButtons() {
+  on(el("btnCheck"), "click", checkAnswer);
+  on(el("btnNext"), "click", nextTask);
 
-    speak(text);
+  const btnAudio = el("btnAudio") || qs('[data-action="audio"]');
+  on(btnAudio, "click", playCurrentAudio);
+
+  // Optional "X" close button (если есть)
+  const btnClose = el("btnClose") || qs('[data-action="close"]') || qs(".btnClose");
+  on(btnClose, "click", () => {
+    // выходим в путь
+    progress.inLesson = false;
+    progress.taskIndex = 0;
+    saveProgress();
+    goScreen("path");
   });
 
-  btnResultNext.addEventListener("click", onResultNext);
-
-  el("btnExport").addEventListener("click", async () => {
-    const raw = JSON.stringify(progress, null, 2);
-    await openModal({ title: "Экспорт", body: raw, showCancel: false, okText: "Закрыть" });
+  // Lesson done modal buttons (если есть)
+  on(el("btnDoneToPath"), "click", () => {
+    const modal = el("lessonDoneModal");
+    if (modal) modal.classList.add("hidden");
+    goScreen("path");
   });
 
-  el("btnImport").addEventListener("click", async () => {
-    await openModal({
-      title: "Импорт",
-      body: "Дальше сделаем нормальное окно импорта (textarea + кнопка).",
-      showCancel: false,
-      okText: "Ок"
-    });
+  on(el("btnDoneRepeat"), "click", () => {
+    const modal = el("lessonDoneModal");
+    if (modal) modal.classList.add("hidden");
+    startLesson("lesson_1");
   });
+}
 
-  el("btnSync").addEventListener("click", async () => {
-    await saveProgress(progress);
-    await openModal({ title: "Синк", body: "Сохранил в CloudStorage + localStorage ✅", showCancel: false });
-  });
-
-  el("btnReset").addEventListener("click", async () => {
-    const ok = await openModal({
-      title: "Сброс",
-      body: "Точно сбросить прогресс? Это действие нельзя отменить.",
-      okText: "СБРОСИТЬ",
-      cancelText: "Отмена"
-    });
+function bindStatsButtons() {
+  const btnReset = el("btnResetProgress") || qs('[data-action="resetProgress"]');
+  on(btnReset, "click", () => {
+    const ok = confirm("Сбросить прогресс? Это действие нельзя отменить.");
     if (!ok) return;
-
-    progress = defaultProgress();
-    await saveProgress(progress);
-    renderTop();
-    await openModal({ title: "Готово", body: "Прогресс сброшен ✅", showCancel: false });
+    progress = { ...DEFAULT_PROGRESS };
+    resetDayIfNeeded();
+    saveProgress();
+    renderHome();
+    renderPath();
+    renderStats();
+    goScreen("path");
   });
-
-  el("btnExit").addEventListener("click", () => {
-    const TG = tg();
-    if (TG) TG.close();
-    else setActiveScreen("home");
-  });
-
-  setActiveScreen("home");
 }
 
-init();
+/* ---------- Init ---------- */
+
+async function init() {
+  initTTS();
+  resetDayIfNeeded();
+
+  bindTabs();
+  bindHomeButtons();
+  bindPathButtons();
+  bindPracticeButtons();
+  bindStatsButtons();
+
+  renderHome();
+  renderPath();
+  renderStats();
+
+  // стартовый экран:
+  // если хочешь убрать "Главную" позже — просто ставь goScreen("path")
+  goScreen("home");
+}
+
+document.addEventListener("DOMContentLoaded", init);
