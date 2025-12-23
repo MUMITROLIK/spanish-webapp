@@ -2,52 +2,25 @@
    Telegram + Storage helpers
 ========================= */
 
-// ✅ основной ключ (НЕ МЕНЯЙ, иначе “пропадёт прогресс”)
 const STORAGE_KEY = "spanish_trainer_progress_v1";
-
-// ✅ если раньше был другой ключ — добавь сюда (миграция)
 const LEGACY_KEYS = [
   "duo_like_progress_v1",
-  "spanish_trainer_progress", // если вдруг было
+  "spanish_trainer_progress_v1",
+  "spanish_trainer_progress"
 ];
 
 function tg() {
   return window.Telegram?.WebApp;
 }
-function hasCloudStorage() {
-  return !!tg()?.CloudStorage;
-}
 
-function cloudGet(key) {
-  return new Promise((resolve) => {
-    try{
-      tg().CloudStorage.getItem(key, (err, value) => {
-        if (err) return resolve(null);
-        resolve(value ?? null);
-      });
-    }catch(_){
-      resolve(null);
-    }
-  });
-}
-
-function cloudSet(key, value) {
-  return new Promise((resolve) => {
-    try{
-      tg().CloudStorage.setItem(key, value, () => resolve());
-    }catch(_){
-      resolve();
-    }
-  });
+function el(id) {
+  return document.getElementById(id);
 }
 
 function safeParse(json) {
   try { return JSON.parse(json); } catch { return null; }
 }
 
-/* =========================
-   Progress model
-========================= */
 function todayKey() {
   const d = new Date();
   const y = d.getFullYear();
@@ -56,110 +29,72 @@ function todayKey() {
   return `${y}-${m}-${day}`;
 }
 
-
-function dayKeyOffset(deltaDays) {
-  const d = new Date();
-  d.setDate(d.getDate() + (deltaDays || 0));
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-
 function defaultProgress() {
   return {
     version: 1,
     xpTotal: 0,
     streak: 0,
+    lastActiveDay: null,
+
     answeredToday: 0,
     correctToday: 0,
-    wordsLearned: 0,
-    completed: {},
-    vocab: {},
-    dayKey: todayKey(),
-    lastActive: todayKey()
+    todayXp: 0,
+
+    wordsLearned: 0
   };
 }
 
-function ensureDay(prog) {
-  const t = todayKey();
-  if (prog.dayKey !== t) {
-    // новый день
-    prog.dayKey = t;
-    prog.answeredToday = 0;
-    prog.correctToday = 0;
-  }
-}
+function loadLocal() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (raw) return safeParse(raw);
 
-/* =========================
-   ✅ Robust load/save (Cloud + Local mirror)
-   - НЕ перетираем нулём при старте
-   - миграция со старых ключей
-========================= */
-function localGet(key) {
-  try { return localStorage.getItem(key); } catch { return null; }
-}
-function localSet(key, value) {
-  try { localStorage.setItem(key, value); } catch {}
-}
-
-async function loadProgress() {
-  // 1) пробуем CloudStorage
-  if (hasCloudStorage()) {
-    const cloudRaw = await cloudGet(STORAGE_KEY);
-    const cloudObj = cloudRaw ? safeParse(cloudRaw) : null;
-    if (cloudObj) return cloudObj;
-  }
-
-  // 2) пробуем localStorage
-  const localRaw = localGet(STORAGE_KEY);
-  const localObj = localRaw ? safeParse(localRaw) : null;
-  if (localObj) return localObj;
-
-  // 3) миграция со старых ключей (сначала Cloud, потом Local)
+  // migration
   for (const k of LEGACY_KEYS) {
-    if (hasCloudStorage()) {
-      const raw = await cloudGet(k);
-      const obj = raw ? safeParse(raw) : null;
-      if (obj) return obj;
+    const legacy = localStorage.getItem(k);
+    if (legacy) {
+      const parsed = safeParse(legacy);
+      if (parsed) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+        return parsed;
+      }
     }
-    const raw2 = localGet(k);
-    const obj2 = raw2 ? safeParse(raw2) : null;
-    if (obj2) return obj2;
   }
 
-  // 4) ничего нет → дефолт
-  return defaultProgress();
+  return null;
 }
 
-async function saveProgress(prog) {
-  const raw = JSON.stringify(prog);
+function saveLocal(progress) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+}
 
-  // ✅ пишем в local всегда (быстро/надёжно)
-  localSet(STORAGE_KEY, raw);
+// (опционально) cloud storage в Telegram
+async function cloudSet(key, value) {
+  const t = tg();
+  if (!t?.CloudStorage) return false;
+  return new Promise((resolve) => {
+    t.CloudStorage.setItem(key, value, (err) => resolve(!err));
+  });
+}
 
-  // ✅ и в Cloud (для синка между устройствами)
-  if (hasCloudStorage()) {
-    await cloudSet(STORAGE_KEY, raw);
-  }
+async function cloudGet(key) {
+  const t = tg();
+  if (!t?.CloudStorage) return null;
+  return new Promise((resolve) => {
+    t.CloudStorage.getItem(key, (err, val) => resolve(err ? null : val));
+  });
 }
 
 /* =========================
-   Simple content (lessons)
+   Tasks
 ========================= */
-const LESSONS = [
-  { id: "m1r1", title: "Модуль 1 · Раздел 1", sub: "Заказывайте в кафе", xp: 20 },
-  { id: "m1r2", title: "Модуль 1 · Раздел 2", sub: "Приветствия", xp: 20 },
-  { id: "m1r3", title: "Модуль 1 · Раздел 3", sub: "Происхождение", xp: 20 },
-];
 
 const TASKS = [
   {
     label: "НОВОЕ СЛОВО",
     title: "Переведи предложение",
     prompt: "Francia y México.",
-    words: ["Франция", "и", "Мексика"]
+    words: ["Франция", "и", "Мексика"],
+    correct: ["Франция", "и", "Мексика"]
   },
   {
     label: "ЗАКОНЧИТЕ ПРЕДЛОЖЕНИЕ",
@@ -169,383 +104,258 @@ const TASKS = [
     correct: ["Франция"]
   },
   {
-    label: "АУДИО",
-    title: "Что вы услышали?",
-    prompt: "Yo soy Ana, encantada.",
-    words: ["Yo", "soy", "Ana", "encantada", "helado", "tú"],
-    correct: ["Yo","soy","Ana","encantada"]
-  }
+  label: "АУДИО",
+  title: "Что вы услышали?",
+  prompt: "Yo soy Ana, encantada.",
+  promptMask: "Нажми 🔊 и собери фразу 👂",
+  audioOnly: true,
+  words: ["Yo", "soy", "Ana", "encantada", "helado", "tú"],
+  correct: ["Yo", "soy", "Ana", "encantada"]
+}
+
 ];
+
+/* =========================
+   State
+========================= */
+
+let progress = defaultProgress();
+let taskIndex = 0;
+let currentTask = TASKS[0];
+let picked = [];
+let lastAnswerWasCorrect = false;
+
+const DAILY_GOAL_XP = 50;
 
 /* =========================
    UI helpers
 ========================= */
-const el = (id) => document.getElementById(id);
 
-const screens = {
-  home: el("screenHome"),
-  path: el("screenPath"),
-  practice: el("screenPractice"),
-  stats: el("screenStats"),
-};
-
-function setActiveScreen(name) {
-  Object.entries(screens).forEach(([k, node]) => {
-    node.classList.toggle("isActive", k === name);
-  });
-
+function setActiveTab(go) {
   document.querySelectorAll(".tab").forEach(btn => {
-    btn.classList.toggle("isActive", btn.dataset.go === name);
+    btn.classList.toggle("isActive", btn.dataset.go === go);
+  });
+
+  document.querySelectorAll(".screen").forEach(sec => {
+    sec.classList.toggle("isActive", sec.id === `screen${cap(go)}`);
   });
 }
 
-function animateTaskSwap(fnRender) {
-  const card = el("taskCard");
-  card.classList.add("taskSwapOut");
-  setTimeout(() => {
-    fnRender();
-    requestAnimationFrame(() => {
-      card.classList.remove("taskSwapOut");
-    });
-  }, 180);
+function cap(s) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-/* =========================
-   Modal (clickable fix)
-========================= */
-const modal = el("modal");
-const modalTitle = el("modalTitle");
-const modalBody = el("modalBody");
-const modalOk = el("modalOk");
-const modalCancel = el("modalCancel");
-const modalX = el("modalX");
-// RESULT SHEET refs
-const resultSheet = el("resultSheet");
-const resultTitle = el("resultTitle");
-const resultSub = el("resultSub");
-const btnNext = el("btnNext");
-const confettiBox = el("confetti");
-
-let lastAnswerWasCorrect = false;
-
-
-let modalResolver = null;
-function clearConfetti(){
-  confettiBox.innerHTML = "";
-}
-
-function fireConfetti(){
-  clearConfetti();
-  const pieces = 18; // можно 30 если хочешь плотнее
-
-  for (let i = 0; i < pieces; i++) {
-    const p = document.createElement("div");
-    p.className = "confettiPiece";
-    p.style.left = Math.random() * 100 + "%";
-    p.style.transform = `translateY(0) rotate(${Math.random()*180}deg)`;
-    p.style.background = `hsl(${Math.floor(Math.random()*360)}, 90%, 60%)`;
-    p.style.animationDelay = (Math.random() * 0.10) + "s";
-    confettiBox.appendChild(p);
-  }
-
-  setTimeout(clearConfetti, 1100);
-}
-
-function showResultSheet({ ok, title, sub }) {
-  // темы
-  resultSheet.classList.toggle("good", ok);
-  resultSheet.classList.toggle("bad", !ok);
-
-  resultTitle.textContent = title;
-  resultSub.textContent = sub;
-
-  resultSheet.classList.remove("hidden");
-
-  if (ok) fireConfetti();
-}
-
-function hideResultSheet() {
-  resultSheet.classList.add("hidden");
-}
-
-
-function openModal({ title, body, okText = "Ок", cancelText = "Отмена", showCancel = true }) {
-  modalTitle.textContent = title || "Сообщение";
-
-  // body может быть строкой или DOM-элементом
-  modalBody.innerHTML = "";
-  if (body instanceof HTMLElement) {
-    modalBody.appendChild(body);
-  } else {
-    modalBody.textContent = body || "";
-  }
-  modalOk.textContent = okText;
-  modalCancel.textContent = cancelText;
-  modalCancel.style.display = showCancel ? "" : "none";
-
-  document.body.classList.add("modalOpen");
-  modal.classList.remove("hidden");
-
-  return new Promise((resolve) => {
-    modalResolver = resolve;
-  });
-}
-
-function closeModal(result) {
-  modal.classList.add("hidden");
-  document.body.classList.remove("modalOpen");
-  if (modalResolver) {
-    modalResolver(result);
-    modalResolver = null;
+function resetDayIfNeeded() {
+  const today = todayKey();
+  if (progress.lastActiveDay !== today) {
+    progress.answeredToday = 0;
+    progress.correctToday = 0;
+    progress.todayXp = 0;
+    progress.lastActiveDay = today;
+    saveLocal(progress);
   }
 }
 
-modalOk.addEventListener("click", () => closeModal(true));
-modalCancel.addEventListener("click", () => closeModal(false));
-modalX.addEventListener("click", () => closeModal(false));
-modal.addEventListener("click", (e) => {
-  if (e.target === modal) closeModal(false);
-});
-
-/* =========================
-   Practice logic
-========================= */
-let progress = defaultProgress();
-
-let taskIndex = 0;
-let currentTask = TASKS[0];
-let picked = [];
-
-// =========================
-// TTS (speechSynthesis)
-// =========================
-let ttsVoicesReady = false;
-let lastAutoSpokenIndex = -1;
-
-function ensureVoicesLoaded() {
-  return new Promise((resolve) => {
-    if (!("speechSynthesis" in window)) return resolve(false);
-
-    const synth = window.speechSynthesis;
-    const done = () => {
-      ttsVoicesReady = true;
-      resolve(true);
-    };
-
-    const voices = synth.getVoices();
-    if (voices && voices.length) return done();
-
-    const handler = () => {
-      synth.removeEventListener("voiceschanged", handler);
-      done();
-    };
-    synth.addEventListener("voiceschanged", handler);
-
-    setTimeout(() => {
-      synth.removeEventListener("voiceschanged", handler);
-      done();
-    }, 600);
-  });
-}
-
-function pickVoice(lang = "es-ES") {
-  if (!("speechSynthesis" in window)) return null;
-  const voices = window.speechSynthesis.getVoices() || [];
-  const langLC = String(lang).toLowerCase();
-
-  let v = voices.find(x => String(x.lang).toLowerCase() === langLC);
-  if (v) return v;
-
-  const prefix = langLC.split("-")[0];
-  v = voices.find(x => String(x.lang).toLowerCase().startsWith(prefix));
-  return v || null;
-}
-
-function speak(text, lang = "es-ES") {
-  if (!text) return;
-  if (!("speechSynthesis" in window)) {
-    openModal({ title: "Аудио", body: "На этом устройстве нет поддержки озвучки (speechSynthesis).", showCancel: false });
-    return;
-  }
-
-  const synth = window.speechSynthesis;
-  try { synth.cancel(); } catch {}
-
-  const u = new SpeechSynthesisUtterance(String(text));
-  u.lang = lang;
-
-  const voice = pickVoice(lang);
-  if (voice) u.voice = voice;
-
-  u.rate = 1.0;
-  u.pitch = 1.0;
-
-  synth.speak(u);
-}
-
-function speakPrompt(auto = false) {
-  const lang = currentTask.ttsLang || "es-ES";
-  if (auto) {
-    if (taskIndex === lastAutoSpokenIndex) return;
-    lastAutoSpokenIndex = taskIndex;
-  }
-  speak(currentTask.prompt, lang);
+function calcAcc() {
+  if (!progress.answeredToday) return 0;
+  return Math.round((progress.correctToday / progress.answeredToday) * 100);
 }
 
 function renderTop() {
-  el("xpTotal").textContent = String(progress.xpTotal);
+  // “энергия” в этой версии — просто остаток до цели (чтоб визуально было)
+  const energy = Math.max(0, DAILY_GOAL_XP - progress.todayXp);
+
+  el("energy").textContent = String(energy);
   el("streak").textContent = String(progress.streak);
-  el("energy").textContent = String(25); // просто визуально
+  el("xpTotal").textContent = String(progress.xpTotal);
 
+  el("homeEnergy").textContent = String(energy);
   el("homeStreak").textContent = String(progress.streak);
-  el("homeEnergy").textContent = String(25);
 
-  el("todayXp").textContent = String(progress.correctToday * 10); // условно
-  const acc = progress.answeredToday ? Math.round((progress.correctToday / progress.answeredToday) * 100) : 0;
-  el("acc").textContent = String(acc);
+  el("todayXp").textContent = String(progress.todayXp);
+  el("acc").textContent = String(calcAcc());
 
+  // progress bar
+  const pct = Math.max(0, Math.min(100, Math.round((progress.todayXp / DAILY_GOAL_XP) * 100)));
+  el("barFill").style.width = `${pct}%`;
+
+  // stats screen
   el("sXp").textContent = String(progress.xpTotal);
   el("sStreak").textContent = String(progress.streak);
   el("sAnswered").textContent = String(progress.answeredToday);
-  el("sAcc").textContent = `${acc}%`;
+  el("sAcc").textContent = `${calcAcc()}%`;
   el("sWords").textContent = String(progress.wordsLearned);
-
-  // progress bar
-  const fill = Math.min(100, (progress.correctToday * 20));
-  el("barFill").style.width = `${fill}%`;
 }
 
-function renderPath() {
-  const list = el("pathList");
-  list.innerHTML = "";
-  LESSONS.forEach(l => {
-    const div = document.createElement("div");
-    div.className = "pathItem";
-    div.innerHTML = `
-      <div>
-        <div class="pathName">${l.title}</div>
-        <div class="pathSub">${l.sub} · +${l.xp} XP</div>
-      </div>
-      <div>›</div>
-    `;
-    div.addEventListener("click", async () => {
-      const ok = await openModal({
-        title: l.sub,
-        body: `Начать урок? Получишь +${l.xp} XP за прохождение.`,
-        okText: "НАЧАТЬ",
-        cancelText: "Отмена"
-      });
-      if (ok) startPractice();
-    });
-    list.appendChild(div);
-  });
-}
-
-function renderTask() {
-  currentTask = TASKS[taskIndex % TASKS.length];
+function clearTaskUI() {
   picked = [];
-
-  el("taskLabel").textContent = currentTask.label;
-  el("taskTitle").textContent = currentTask.title;
-  el("promptText").textContent = currentTask.prompt;
-
-  // Авто-озвучка для заданий "АУДИО" (если браузер разрешит)
-  if (currentTask.label === "АУДИО") {
-    ensureVoicesLoaded().then(() => speakPrompt(true));
-  }
-
-  const chips = el("chips");
-  chips.innerHTML = "";
-  currentTask.words.forEach(w => {
-    const b = document.createElement("button");
-    b.className = "chip";
-    b.textContent = w;
-    b.addEventListener("click", () => {
-      picked.push(w);
-      renderAnswer();
-      b.disabled = true;
-      b.style.opacity = ".45";
-      el("btnCheck").disabled = picked.length === 0;
-    });
-    chips.appendChild(b);
-  });
-
-  renderAnswer();
+  el("answerArea").innerHTML = "";
   el("feedback").textContent = "";
   el("btnCheck").disabled = true;
 }
 
-function renderAnswer() {
+function renderPicked() {
   const area = el("answerArea");
   area.innerHTML = "";
+
   if (picked.length === 0) {
-    area.textContent = "Собери ответ из слов снизу…";
+    const hint = document.createElement("div");
+    hint.className = "answerHint";
+    hint.textContent = "Нажимай на слова ниже 👇";
+    area.appendChild(hint);
+    el("btnCheck").disabled = true;
     return;
   }
 
   picked.forEach((w, idx) => {
-    const t = document.createElement("div");
-    t.className = "answerToken";
-    t.textContent = w;
-    t.addEventListener("click", () => {
-      // вернуть слово назад
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "pickedChip";
+    chip.textContent = w;
+
+    chip.addEventListener("click", () => {
       picked.splice(idx, 1);
-      renderTaskRebuildChips();
+      renderPicked();
     });
-    area.appendChild(t);
+
+    area.appendChild(chip);
   });
+
+  el("btnCheck").disabled = false;
 }
 
-function renderTaskRebuildChips(){
-  // пересобираем чипсы: какие выбраны — отключаем
-  const chosen = new Set(picked);
-  const chips = el("chips");
-  chips.innerHTML = "";
-  currentTask.words.forEach(w => {
+function renderChips() {
+  const box = el("chips");
+  box.innerHTML = "";
+
+  currentTask.words.forEach((w) => {
     const b = document.createElement("button");
+    b.type = "button";
     b.className = "chip";
     b.textContent = w;
 
-    const usedCount = picked.filter(x => x === w).length;
-    if (usedCount > 0) {
-      b.disabled = true;
-      b.style.opacity = ".45";
-    }
-
     b.addEventListener("click", () => {
       picked.push(w);
-      renderTaskRebuildChips();
+      renderPicked();
     });
-    chips.appendChild(b);
+
+    box.appendChild(b);
   });
-
-  const area = el("answerArea");
-  area.innerHTML = "";
-  if (picked.length === 0) area.textContent = "Собери ответ из слов снизу…";
-  else {
-    picked.forEach((w, idx) => {
-      const t = document.createElement("div");
-      t.className = "answerToken";
-      t.textContent = w;
-      t.addEventListener("click", () => {
-        picked.splice(idx, 1);
-        renderTaskRebuildChips();
-      });
-      area.appendChild(t);
-    });
-  }
-
-  el("btnCheck").disabled = picked.length === 0;
 }
 
-async function checkAnswer() {
-  ensureDay(progress);
+function renderTask() {
+  currentTask = TASKS[Math.min(taskIndex, TASKS.length - 1)];
 
+  el("taskLabel").textContent = currentTask.label;
+  el("taskTitle").textContent = currentTask.title;
+
+  // ✅ ВАЖНО: не показываем “что услышали” текстом на аудио-задании
+  if (currentTask.audioOnly) {
+    el("promptText").textContent = currentTask.promptMask || "Нажми 🔊 и собери фразу 👂";
+  } else {
+    el("promptText").textContent = currentTask.prompt;
+  }
+
+  hideResultSheet();
+  clearTaskUI();
+  renderChips();
+  renderPicked();
+
+  // ✅ Автопопытка озвучки только на АУДИО (может блокироваться браузером)
+  if (currentTask.audioOnly) {
+    trySpeak(currentTask.prompt, { preferAuto: true });
+  }
+}
+
+
+function showResultSheet({ ok, title, sub }) {
+  const sheet = el("resultSheet");
+  sheet.classList.remove("hidden");
+
+  el("resultTitle").textContent = title;
+  el("resultSub").textContent = sub;
+
+  sheet.classList.toggle("isOk", !!ok);
+  sheet.classList.toggle("isBad", !ok);
+
+  // ✅ чтобы результат не наезжал на кнопку — прячем "ПРОВЕРИТЬ"
+  const checkBtn = el("btnCheck");
+  if (checkBtn) checkBtn.style.visibility = "hidden";
+
+  if (ok) spawnConfetti();
+}
+
+
+function hideResultSheet() {
+  el("resultSheet").classList.add("hidden");
+  clearConfetti();
+
+  // ✅ возвращаем "ПРОВЕРИТЬ"
+  const checkBtn = el("btnCheck");
+  if (checkBtn) checkBtn.style.visibility = "visible";
+}
+
+
+
+function spawnConfetti() {
+  const box = el("confetti");
+  box.innerHTML = "";
+
+  const pieces = 40;
+  for (let i = 0; i < pieces; i++) {
+    const p = document.createElement("div");
+    p.className = "confettiPiece";
+    p.style.left = Math.random() * 100 + "%";
+    p.style.animationDelay = (Math.random() * 0.15) + "s";
+    p.style.transform = `rotate(${Math.random() * 180}deg)`;
+    box.appendChild(p);
+  }
+
+  setTimeout(clearConfetti, 900);
+}
+
+function clearConfetti() {
+  const box = el("confetti");
+  if (box) box.innerHTML = "";
+}
+
+/* =========================
+   Answer logic
+========================= */
+
+function arraysEqual(a, b) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function updateStreakOnCorrect() {
+  const today = todayKey();
+
+  // streak: увеличиваем если вчера/сегодня было действие и сегодня первый раз правильно
+  // упрощённо: если сегодня есть хотя бы 1 правильный — streak >= 1
+  // + если вчера тоже было активность — streak++ (самое простое поведение)
+  if (progress.correctToday === 1) {
+    // первый правильный сегодня
+    if (!progress._lastStreakDay) {
+      progress.streak = Math.max(progress.streak, 1);
+    } else {
+      // если вчера
+      const prev = new Date(progress._lastStreakDay);
+      const cur = new Date(today);
+      const diffDays = Math.round((cur - prev) / 86400000);
+
+      if (diffDays === 1) progress.streak += 1;
+      else if (diffDays > 1) progress.streak = 1;
+      else progress.streak = Math.max(progress.streak, 1);
+    }
+    progress._lastStreakDay = today;
+  }
+}
+
+function checkAnswer() {
   progress.answeredToday++;
 
-  // если нет correct — считаем правильным любой ответ (демо)
   const correctArr = currentTask.correct || currentTask.words;
-  const ok = JSON.stringify(picked) === JSON.stringify(correctArr);
+  const ok = arraysEqual(picked, correctArr);
 
   lastAnswerWasCorrect = ok;
 
@@ -553,29 +363,16 @@ async function checkAnswer() {
   el("btnCheck").disabled = true;
 
   if (ok) {
-    // начисления
     progress.correctToday++;
     progress.xpTotal += 10;
+    progress.todayXp += 10;
 
-    // streak: обновляем только на первом правильном за день
-    if (progress.correctToday === 1) {
-      const today = todayKey();
-      const yesterday = dayKeyOffset(-1);
+    // условно считаем “выучил слово” на заданиях "НОВОЕ СЛОВО"
+    if (currentTask.label === "НОВОЕ СЛОВО") progress.wordsLearned++;
 
-      if (!progress.streak || progress.streak < 1) {
-        progress.streak = 1;
-      } else if (progress.lastActive === yesterday) {
-        progress.streak += 1;
-      } else if (progress.lastActive === today) {
-        progress.streak = Math.max(progress.streak, 1);
-      } else {
-        progress.streak = 1;
-      }
-
-      progress.lastActive = today;
-    } else {
-      progress.lastActive = todayKey();
-    }
+    updateStreakOnCorrect();
+    saveLocal(progress);
+    renderTop();
 
     showResultSheet({
       ok: true,
@@ -583,170 +380,385 @@ async function checkAnswer() {
       sub: "+10 XP"
     });
   } else {
+    saveLocal(progress);
+    renderTop();
+
+    el("feedback").textContent = "Есть ошибка. Попробуй ещё раз 🙃";
     showResultSheet({
       ok: false,
-      title: "Непочтёёёт 😅",
+      title: "Почти…",
       sub: "Попробуй ещё раз"
     });
   }
-
-  renderTop();
-  await saveProgress(progress);
-
-  // ⚠️ ВАЖНО: НЕ перелистываем задание автоматически.
-  // Переход к следующему — только по кнопке «ДАЛЕЕ».
 }
 
-function startPractice() {
-  setActiveScreen("practice");
-  animateTaskSwap(() => renderTask());
-}
+async function goNextFromResult() {
+  hideResultSheet();
 
-/* =========================
-   App init
-========================= */
-async function init() {
-  const TG = tg();
-  if (TG) {
-    TG.ready();
-    TG.expand();
-  }
+  if (lastAnswerWasCorrect) {
+    taskIndex++;
 
-  progress = await loadProgress();
-  ensureDay(progress);
+    // ✅ дошли до конца урока — выбор: Повторить или Путь
+    if (taskIndex >= TASKS.length) {
+      const choice = await openModal({
+        title: "Урок завершён 🎉",
+        body: "Хочешь повторить урок или перейти в «Путь»?",
+        showCancel: true,
+        okText: "Повторить",
+        cancelText: "Путь"
+      });
 
-  // ✅ ВАЖНО: не перетирать нулём чужие данные.
-  // Сохраняем только если реально есть что сохранить:
-  await saveProgress(progress);
-
-  renderTop();
-  renderPath();
-
-  // tabs
-  document.querySelectorAll(".tab").forEach(btn => {
-    btn.addEventListener("click", () => {
-      setActiveScreen(btn.dataset.go);
-    });
-  });
-
-  el("btnContinue").addEventListener("click", startPractice);
-
-  el("btnCheck").addEventListener("click", checkAnswer);
-
-  el("btnAudio").addEventListener("click", async () => {
-    await ensureVoicesLoaded();
-    speakPrompt(false);
-  });
-
-  el("btnExport").addEventListener("click", async () => {
-    const raw = JSON.stringify(progress, null, 2);
-    await openModal({ title: "Экспорт", body: raw, showCancel: false, okText: "Закрыть" });
-  });
-
-  el("btnImport").addEventListener("click", async () => {
-    const wrap = document.createElement("div");
-    wrap.className = "importWrap";
-
-    const hint = document.createElement("div");
-    hint.className = "importHint";
-    hint.textContent = "Вставь JSON прогресса (из «Экспорт»), затем нажми «Импортировать».";
-
-    const ta = document.createElement("textarea");
-    ta.className = "importArea";
-    ta.placeholder = '{"xpTotal": 120, "...": "..."}';
-    ta.spellcheck = false;
-
-    wrap.appendChild(hint);
-    wrap.appendChild(ta);
-
-    const ok = await openModal({
-      title: "Импорт",
-      body: wrap,
-      okText: "Импортировать",
-      cancelText: "Отмена",
-      showCancel: true
-    });
-
-    if (!ok) return;
-
-    const raw = (ta.value || "").trim();
-    if (!raw) {
-      await openModal({ title: "Импорт", body: "Пусто 😅 Вставь JSON и попробуй ещё раз.", showCancel: false });
+      if (choice) {
+        taskIndex = 0;
+        renderTask();
+      } else {
+        setActiveTab("path");
+        renderPath();
+        renderTop();
+      }
       return;
     }
 
-    try {
-      const data = JSON.parse(raw);
+    renderTask();
+  } else {
+    // если ошибка — остаёмся на текущем задании
+    el("btnCheck").disabled = picked.length === 0;
+    el("feedback").textContent = "";
+  }
+}
 
-      const merged = { ...defaultProgress(), ...data };
-      merged.xpTotal = Number(merged.xpTotal) || 0;
-      merged.streak = Number(merged.streak) || 0;
-      merged.answeredToday = Number(merged.answeredToday) || 0;
-      merged.correctToday = Number(merged.correctToday) || 0;
-      merged.wordsLearned = Number(merged.wordsLearned) || 0;
-      merged.dayKey = merged.dayKey || todayKey();
-      merged.lastActive = merged.lastActive || merged.dayKey;
 
-      progress = merged;
-      ensureDay(progress);
+/* =========================
+   TTS (speechSynthesis)
+========================= */
 
-      await saveProgress(progress);
-      renderTop();
+let cachedVoice = null;
 
-      await openModal({ title: "Импорт", body: "Готово ✅ Прогресс загружен.", showCancel: false });
-    } catch (e) {
-      await openModal({
-        title: "Ошибка импорта",
-        body: "Не получилось прочитать JSON. Проверь, что ты вставил именно JSON без лишних символов.",
-        showCancel: false
-      });
+function pickSpanishVoice() {
+  const voices = window.speechSynthesis?.getVoices?.() || [];
+  if (!voices.length) return null;
+
+  const norm = (s) => (s || "").toLowerCase();
+
+  const esES = voices.find(v => norm(v.lang).startsWith("es-es"));
+  if (esES) return esES;
+
+  const anyEs = voices.find(v => norm(v.lang).startsWith("es"));
+  if (anyEs) return anyEs;
+
+  return voices[0] || null;
+}
+
+
+let lastSpeakAt = 0;
+
+function trySpeak(text, { preferAuto = false } = {}) {
+  if (!("speechSynthesis" in window)) {
+    if (!preferAuto) {
+      openModal({ title: "Аудио", body: "speechSynthesis не поддерживается.", showCancel: false });
     }
+    return;
+  }
+
+  // анти-спам кликов (чтобы не путалось)
+  const now = Date.now();
+  if (now - lastSpeakAt < 200) return;
+  lastSpeakAt = now;
+
+  window.speechSynthesis.cancel();
+
+  const u = new SpeechSynthesisUtterance(text);
+
+  // ✅ фиксируем язык, чтобы не “переобувалось”
+  u.lang = "es-ES";
+
+  // ✅ выбираем испанский голос
+  cachedVoice = pickSpanishVoice();
+  if (cachedVoice) u.voice = cachedVoice;
+
+  u.rate = 0.95;
+  u.pitch = 1.0;
+
+  try {
+    window.speechSynthesis.speak(u);
+  } catch {
+    // в некоторых webview может падать — игнорим
+  }
+}
+
+
+// важно для некоторых браузеров: голоса грузятся асинхронно
+if ("speechSynthesis" in window) {
+  window.speechSynthesis.onvoiceschanged = () => {
+    cachedVoice = pickSpanishVoice();
+  };
+}
+
+/* =========================
+   Modal
+========================= */
+
+function openModal({ title, body, showCancel = true, okText = "Ок", cancelText = "Отмена" }) {
+  return new Promise((resolve) => {
+    const modal = el("modal");
+    el("modalTitle").textContent = title;
+
+    const bodyEl = el("modalBody");
+    bodyEl.innerHTML = "";
+    if (typeof body === "string") {
+      const div = document.createElement("div");
+      div.textContent = body;
+      bodyEl.appendChild(div);
+    } else {
+      bodyEl.appendChild(body);
+    }
+
+    const btnOk = el("modalOk");
+    const btnCancel = el("modalCancel");
+    const btnX = el("modalX");
+
+    btnOk.textContent = okText;
+    btnCancel.textContent = cancelText;
+
+    btnCancel.style.display = showCancel ? "" : "none";
+
+    function close(val) {
+      modal.classList.add("hidden");
+      modal.setAttribute("aria-hidden", "true");
+
+      btnOk.onclick = null;
+      btnCancel.onclick = null;
+      btnX.onclick = null;
+
+      resolve(val);
+    }
+
+    btnOk.onclick = () => close(true);
+    btnCancel.onclick = () => close(false);
+    btnX.onclick = () => close(false);
+
+    modal.classList.remove("hidden");
+    modal.setAttribute("aria-hidden", "false");
+  });
+}
+
+async function importModal() {
+  const wrap = document.createElement("div");
+
+  const p = document.createElement("div");
+  p.textContent = "Вставь JSON прогресса сюда:";
+  p.style.marginBottom = "10px";
+
+  const ta = document.createElement("textarea");
+  ta.style.width = "100%";
+  ta.style.height = "160px";
+  ta.style.resize = "vertical";
+  ta.placeholder = "{ ... }";
+
+  wrap.appendChild(p);
+  wrap.appendChild(ta);
+
+  const ok = await openModal({
+    title: "Импорт",
+    body: wrap,
+    showCancel: true,
+    okText: "Импортировать",
+    cancelText: "Отмена"
   });
 
+  if (!ok) return;
+
+  const parsed = safeParse(ta.value.trim());
+  if (!parsed) {
+    await openModal({ title: "Ошибка", body: "Не смог прочитать JSON. Проверь формат.", showCancel: false });
+    return;
+  }
+
+  // мягкая валидация
+  progress = { ...defaultProgress(), ...parsed };
+  resetDayIfNeeded();
+  saveLocal(progress);
+  renderTop();
+
+  await openModal({ title: "Готово ✅", body: "Импорт выполнен.", showCancel: false });
+}
+
+async function exportModal() {
+  const wrap = document.createElement("div");
+
+  const p = document.createElement("div");
+  p.textContent = "Скопируй JSON:";
+  p.style.marginBottom = "10px";
+
+  const ta = document.createElement("textarea");
+  ta.style.width = "100%";
+  ta.style.height = "160px";
+  ta.style.resize = "vertical";
+  ta.value = JSON.stringify(progress, null, 2);
+
+  const copyBtn = document.createElement("button");
+  copyBtn.type = "button";
+  copyBtn.textContent = "Скопировать";
+  copyBtn.style.marginTop = "10px";
+
+  copyBtn.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(ta.value);
+      copyBtn.textContent = "Скопировано ✅";
+      setTimeout(() => (copyBtn.textContent = "Скопировать"), 900);
+    } catch {
+      copyBtn.textContent = "Не вышло :(";
+      setTimeout(() => (copyBtn.textContent = "Скопировать"), 900);
+    }
+  };
+
+  wrap.appendChild(p);
+  wrap.appendChild(ta);
+  wrap.appendChild(copyBtn);
+
+  await openModal({ title: "Экспорт", body: wrap, showCancel: false, okText: "Закрыть" });
+}
+
+/* =========================
+   Path screen
+========================= */
+
+function renderPath() {
+  const list = el("pathList");
+  list.innerHTML = "";
+
+  const lesson = document.createElement("div");
+  lesson.className = "pathItem";
+
+  lesson.innerHTML = `
+    <div class="pathLeft">
+      <div class="pathTitle">Урок 1: База</div>
+      <div class="pathSub">3 задания · быстро · без лимитов</div>
+    </div>
+    <button class="btnPrimary pathBtn" type="button">Начать</button>
+  `;
+
+  lesson.querySelector("button").addEventListener("click", async () => {
+    const ok = await openModal({
+      title: "Начать урок?",
+      body: "Открываем практику и идём по заданиям.",
+      showCancel: true,
+      okText: "НАЧАТЬ",
+      cancelText: "Отмена"
+    });
+
+    if (!ok) return;
+    startPractice();
+  });
+
+  list.appendChild(lesson);
+}
+
+/* =========================
+   Navigation
+========================= */
+
+function startPractice() {
+  taskIndex = 0;
+  setActiveTab("practice");
+  renderTask();
+}
+
+function setupTabs() {
+  document.querySelectorAll(".tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const go = btn.dataset.go;
+      setActiveTab(go);
+
+      if (go === "path") renderPath();
+      if (go === "practice") renderTask();
+      renderTop();
+    });
+  });
+}
+
+/* =========================
+   Init
+========================= */
+
+async function init() {
+  // Telegram setup
+  const t = tg();
+  if (t) {
+    try {
+      t.ready();
+      t.expand();
+      t.setHeaderColor?.("#0b1c22");
+      t.setBackgroundColor?.("#0b1c22");
+    } catch {}
+  }
+
+  progress = loadLocal() || defaultProgress();
+  resetDayIfNeeded();
+  saveLocal(progress);
+
+  setupTabs();
+  renderPath();
+  renderTop();
+
+  // buttons
+  el("btnContinue").addEventListener("click", startPractice);
+  el("btnCheck").addEventListener("click", checkAnswer);
+  el("btnNext").addEventListener("click", goNextFromResult);
+
+  el("btnAudio").addEventListener("click", () => {
+    trySpeak(currentTask.prompt);
+  });
+
+  el("btnExport").addEventListener("click", exportModal);
+  el("btnImport").addEventListener("click", importModal);
+
   el("btnSync").addEventListener("click", async () => {
-    await saveProgress(progress);
-    await openModal({ title: "Синк", body: "Сохранил в CloudStorage + localStorage ✅", showCancel: false });
+    saveLocal(progress);
+    const ok = await cloudSet(STORAGE_KEY, JSON.stringify(progress));
+    await openModal({
+      title: "Синк",
+      body: ok ? "Сохранил в Telegram CloudStorage ✅" : "CloudStorage недоступен (но локально сохранено).",
+      showCancel: false
+    });
   });
 
   el("btnReset").addEventListener("click", async () => {
     const ok = await openModal({
-      title: "Сброс",
-      body: "Точно сбросить прогресс? Это действие нельзя отменить.",
+      title: "Сбросить прогресс?",
+      body: "Удалим XP/статы и начнём с нуля.",
+      showCancel: true,
       okText: "СБРОСИТЬ",
       cancelText: "Отмена"
     });
     if (!ok) return;
 
     progress = defaultProgress();
-    await saveProgress(progress);
+    resetDayIfNeeded();
+    saveLocal(progress);
     renderTop();
-    await openModal({ title: "Готово", body: "Прогресс сброшен ✅", showCancel: false });
+    await openModal({ title: "Готово", body: "Прогресс сброшен.", showCancel: false });
   });
 
   el("btnExit").addEventListener("click", () => {
-    const TG = tg();
-    if (TG) TG.close();
-    else setActiveScreen("home");
+    if (t?.close) t.close();
+    else openModal({ title: "Выход", body: "Закрыть можно вкладку/окно.", showCancel: false });
   });
-  // Кнопка "ДАЛЕЕ" на экране результата
-const btnNext = el("btnNext");
-if (btnNext) {
-  btnNext.addEventListener("click", () => {
-    hideResultSheet();
 
-    if (lastAnswerWasCorrect) {
-      taskIndex++;
-      animateTaskSwap(() => renderTask()); // или renderTask(), если без анимации
-    } else {
-      // если ошибка — остаёмся на том же задании
-      el("btnCheck").disabled = picked.length === 0;
-      el("feedback").textContent = "";
+  // Попробуем подтянуть из CloudStorage, если локально пусто (не обязательно)
+  const cloudRaw = await cloudGet(STORAGE_KEY);
+  if (cloudRaw) {
+    const cloudParsed = safeParse(cloudRaw);
+    if (cloudParsed && (!loadLocal() || loadLocal().xpTotal === 0)) {
+      progress = { ...defaultProgress(), ...cloudParsed };
+      resetDayIfNeeded();
+      saveLocal(progress);
+      renderTop();
     }
-  });
+  }
+
+  // стартовый рендер задачи (чтоб Практика не была пустой)
+  renderTask();
 }
 
-
-  setActiveScreen("home");
-}
-
-init();
+document.addEventListener("DOMContentLoaded", init);

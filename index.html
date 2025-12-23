@@ -5,16 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Spanish Trainer</title>
 
-  <!-- Чтобы работало и в браузере, и в Telegram -->
+  <!-- Telegram WebApp -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-  <link rel="stylesheet" href="./styles.fixed.css" />
+  <!-- Важно: styles.css должен лежать рядом с index.html -->
+  <link rel="stylesheet" href="styles.css?v=3" />
 </head>
+
 <body>
   <div class="app">
     <!-- Top bar -->
     <header class="topbar">
-      <button id="btnExit" class="iconBtn" aria-label="Exit">✕</button>
+      <button id="btnExit" class="iconBtn" aria-label="Exit" type="button">✕</button>
 
       <div class="barWrap" aria-label="Progress">
         <div class="bar">
@@ -29,85 +31,77 @@
       </div>
     </header>
 
+    <!-- Tabs -->
+    <nav class="tabs">
+      <button class="tab isActive" data-go="home" type="button">🏠 Главная</button>
+      <button class="tab" data-go="path" type="button">🧭 Путь</button>
+      <button class="tab" data-go="practice" type="button">🎯 Практика</button>
+      <button class="tab" data-go="stats" type="button">📊 Статы</button>
+    </nav>
+
     <!-- Screens -->
-    <main class="screenHost">
+    <main class="screens">
       <!-- HOME -->
       <section id="screenHome" class="screen isActive">
-        <div class="heroCard">
-          <div class="heroLeft">
-            <div class="logoCircle"></div>
-            <div>
-              <div class="heroTitle">Spanish Trainer</div>
-              <div class="heroSub">мини-дуо режим 😄 · без лимитов</div>
-            </div>
-          </div>
+        <div class="card hero">
+          <div class="heroTitle">Учись быстро,<br>приятно и без духоты</div>
+          <div class="heroSub">Кликаешь урок → проходишь задания → получаешь XP. Сердечек нет, лимитов нет 😁</div>
 
-          <div class="heroRight">
-            <div class="miniPill"><span>⚡</span><b id="homeEnergy">0</b></div>
-            <div class="miniPill"><span>🔥</span><b id="homeStreak">0</b></div>
+          <div class="heroBtns">
+            <button id="btnContinue" class="btnPrimary" type="button">Продолжить</button>
+            <button id="btnSync" class="btnGhost" type="button">Синк в бота</button>
+            <button id="btnExport" class="btnGhost" type="button">Экспорт</button>
+            <button id="btnImport" class="btnGhost" type="button">Импорт</button>
           </div>
         </div>
 
-        <nav class="tabs">
-          <button class="tab isActive" data-go="home">🏠 Главная</button>
-          <button class="tab" data-go="path">🧭 Путь</button>
-          <button class="tab" data-go="practice">🎯 Практика</button>
-          <button class="tab" data-go="stats">📊 Статы</button>
-        </nav>
-
-        <div class="bigCard">
-          <h1>Учись быстро,<br/>приятно и без духоты</h1>
-          <p>Кликаешь урок → проходишь задания → получаешь XP. Сердечек нет, лимитов нет 😉</p>
-
-          <div class="btnRow">
-            <button id="btnContinue" class="btnPrimary">Продолжить</button>
-            <button id="btnSync" class="btnGhost">Синк в бота</button>
-            <button id="btnExport" class="btnGhost">Экспорт</button>
+        <div class="card miniStats">
+          <div class="miniRow">
+            <div class="miniLabel">Цель дня</div>
+            <div class="miniValue"><span id="todayXp">0</span> / 50 XP</div>
+          </div>
+          <div class="miniRow">
+            <div class="miniLabel">Точность</div>
+            <div class="miniValue"><span id="acc">0</span>%</div>
+          </div>
+          <div class="miniRow">
+            <div class="miniLabel">Путь</div>
+            <div class="miniValue">Выбирай урок</div>
           </div>
 
-          <button id="btnImport" class="btnGhost wide">Импорт</button>
-        </div>
-
-        <div class="smallGrid">
-          <div class="smallCard">
-            <div class="smallTitle">Цель дня</div>
-            <div class="smallMeta"><span id="todayXp">0</span> / 50 XP</div>
-          </div>
-          <div class="smallCard">
-            <div class="smallTitle">Точность</div>
-            <div class="smallMeta"><span id="acc">0</span>%</div>
+          <div class="miniPills">
+            <div class="pill"><span class="pillIcon">⚡</span> <span id="homeEnergy">0</span></div>
+            <div class="pill"><span class="pillIcon">🔥</span> <span id="homeStreak">0</span></div>
           </div>
         </div>
       </section>
 
       <!-- PATH -->
       <section id="screenPath" class="screen">
-        <div class="sectionHead">
-          <div class="sectionTitle">Путь</div>
-          <div class="sectionHint">Выбирай урок</div>
+        <div class="card">
+          <div class="cardTitle">Путь</div>
+          <div class="cardSub">Выбери урок и начни практику.</div>
+          <div id="pathList" class="pathList"></div>
         </div>
-
-        <div class="pathList" id="pathList"></div>
       </section>
 
       <!-- PRACTICE -->
       <section id="screenPractice" class="screen">
         <div class="taskCard" id="taskCard">
-          <!-- RESULT SHEET (как в Duolingo) -->
-<div id="resultSheet" class="resultSheet hidden">
-  <div class="resultInner">
-    <div class="resultLeft">
-      <div id="resultTitle" class="resultTitle">Потрясающе!</div>
-      <div id="resultSub" class="resultSub">+10 XP</div>
-    </div>
+          <!-- RESULT SHEET -->
+          <div id="resultSheet" class="resultSheet hidden">
+            <div class="resultInner">
+              <div class="resultLeft">
+                <div id="resultTitle" class="resultTitle">Потрясающе!</div>
+                <div id="resultSub" class="resultSub">+10 XP</div>
+              </div>
 
-    <button id="btnNext" class="resultBtn">ДАЛЕЕ</button>
+              <!-- ВАЖНО: теперь id = btnNext, чтобы JS ловил -->
+              <button id="btnNext" class="resultBtn" type="button">ДАЛЕЕ</button>
+            </div>
 
-  </div>
-
-  <!-- сюда будем кидать конфетти -->
-  <div id="confetti" class="confetti"></div>
-</div>
+            <div id="confetti" class="confetti"></div>
+          </div>
 
           <div class="taskTop">
             <div class="taskLabel" id="taskLabel">НОВОЕ СЛОВО</div>
@@ -116,59 +110,56 @@
 
           <div class="taskBody">
             <div class="bubble">
-              <button id="btnAudio" class="audioBtn" aria-label="Play">🔊</button>
+              <button id="btnAudio" class="audioBtn" aria-label="Play" type="button">🔊</button>
               <div class="bubbleText" id="promptText">Francia y México.</div>
             </div>
 
             <div class="answerArea" id="answerArea"></div>
 
             <div class="chips" id="chips"></div>
-          </div>
 
-          <div class="taskBottom">
-            <div id="feedback" class="feedback"></div>
-            <button id="btnCheck" class="btnPrimary wide" disabled>ПРОВЕРИТЬ</button>
+            <div class="feedback" id="feedback"></div>
+
+            <button id="btnCheck" class="btnPrimary wFull" type="button" disabled>ПРОВЕРИТЬ</button>
           </div>
         </div>
       </section>
 
       <!-- STATS -->
       <section id="screenStats" class="screen">
-        <div class="sectionHead">
-          <div class="sectionTitle">Статы</div>
-          <div class="sectionHint">Твой прогресс</div>
-        </div>
+        <div class="card">
+          <div class="cardTitle">Статы</div>
+          <div class="statsGrid">
+            <div class="statCard"><div class="statName">Всего XP</div><div class="statVal" id="sXp">0</div></div>
+            <div class="statCard"><div class="statName">Streak</div><div class="statVal" id="sStreak">0</div></div>
+            <div class="statCard"><div class="statName">Ответов сегодня</div><div class="statVal" id="sAnswered">0</div></div>
+            <div class="statCard"><div class="statName">Точность сегодня</div><div class="statVal" id="sAcc">0%</div></div>
+            <div class="statCard"><div class="statName">Слов выучено</div><div class="statVal" id="sWords">0</div></div>
+          </div>
 
-        <div class="bigCard">
-          <div class="statLine"><span>Всего XP</span><b id="sXp">0</b></div>
-          <div class="statLine"><span>Streak</span><b id="sStreak">0</b></div>
-          <div class="statLine"><span>Ответов сегодня</span><b id="sAnswered">0</b></div>
-          <div class="statLine"><span>Точность сегодня</span><b id="sAcc">0%</b></div>
-          <div class="statLine"><span>Слов выучено</span><b id="sWords">0</b></div>
-
-          <button id="btnReset" class="btnDanger wide">Сбросить прогресс</button>
+          <button id="btnReset" class="btnDanger" type="button">Сбросить прогресс</button>
         </div>
       </section>
     </main>
   </div>
 
   <!-- MODAL -->
-  <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+  <div id="modal" class="modal hidden" aria-hidden="true">
     <div class="modalCard">
       <div class="modalHead">
         <div id="modalTitle" class="modalTitle">Заголовок</div>
-        <button id="modalX" class="iconBtn">✕</button>
+        <button id="modalX" class="iconBtn" type="button">✕</button>
       </div>
 
       <div id="modalBody" class="modalBody">Текст</div>
 
       <div class="modalActions">
-        <button id="modalCancel" class="btnGhost">Отмена</button>
-        <button id="modalOk" class="btnPrimary">Ок</button>
+        <button id="modalCancel" class="btnGhost" type="button">Отмена</button>
+        <button id="modalOk" class="btnPrimary" type="button">Ок</button>
       </div>
     </div>
   </div>
 
-  <script src="./app.fixed.js"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>
