@@ -588,3 +588,55 @@ body.modalOpen{
   .bigCard h1{ font-size: 30px; }
 }
 
+/* =========================
+   HOME: Mobile / Telegram fix
+   (работает и для .heroBtns и для старых .heroCard)
+========================= */
+
+/* чтобы ничего не вылезало по ширине */
+html, body { overflow-x: hidden; }
+
+/* 1) ТВОЯ ВЁРСТКА (как на скрине): .card.hero + .heroBtns */
+.card.hero .heroTitle h1{
+  margin: 0;
+  font-size: clamp(28px, 4.2vw, 44px);
+  line-height: 1.08;
+}
+
+.card.hero .heroSub{
+  margin-top: 8px;
+  opacity: .9;
+}
+
+.card.hero .heroBtns{
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.card.hero .heroBtns button{
+  width: 100%;
+  justify-content: center;
+}
+
+/* 2) СТАРАЯ/ДРУГАЯ ВЁРСТКА (если где-то есть .heroCard) — тоже подстрахуем */
+.heroCard{
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+@media (max-width: 520px){
+  /* кнопки на главной — в одну колонку (телега узкая) */
+  .card.hero .heroBtns{
+    grid-template-columns: 1fr;
+  }
+
+  /* чтобы табы не выглядели “сдавленными” */
+  .tabs{
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar{ display:none; }
+}
