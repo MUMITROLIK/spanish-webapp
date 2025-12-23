@@ -545,3 +545,46 @@ body.modalOpen{
     opacity: 0;
   }
 }
+/* ====== Статы красиво ====== */
+.statLine{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  font-weight: 900;
+}
+.statLine span{ color: var(--muted); font-weight: 800; }
+.statLine:last-of-type{ border-bottom: 0; }
+
+/* чуть мягче заголовок на главной */
+.bigCard h1{
+  font-size: 38px;
+  line-height: 1.08;
+}
+@media (max-width: 520px){
+  .bigCard h1{ font-size: 30px; }
+}
+/* ====== Статы красиво ====== */
+.statLine{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  font-weight: 900;
+}
+.statLine span{ color: var(--muted); font-weight: 800; }
+.statLine:last-of-type{ border-bottom: 0; }
+
+/* чуть мягче заголовок на главной */
+.bigCard h1{
+  font-size: 38px;
+  line-height: 1.08;
+}
+@media (max-width: 520px){
+  .bigCard h1{ font-size: 30px; }
+}
+
