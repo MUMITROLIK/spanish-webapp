@@ -2,176 +2,182 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Spanish Trainer</title>
-
-  <!-- Telegram WebApp -->
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-  <!-- Важно: styles.css должен лежать рядом с index.html -->
-  <link rel="stylesheet" href="styles.css?v=3" />
+  <link rel="stylesheet" href="./styles.css" />
 </head>
-
 <body>
   <div class="app">
+
     <!-- Top bar -->
     <header class="topbar">
-      <button id="btnExit" class="iconBtn" aria-label="Exit" type="button">✕</button>
+      <button id="btnClose" class="iconBtn" type="button" aria-label="Закрыть">✕</button>
 
-      <div class="barWrap" aria-label="Progress">
+      <div class="topProgress" aria-label="Прогресс">
         <div class="bar">
           <div id="barFill" class="barFill" style="width: 0%"></div>
         </div>
       </div>
 
-      <div class="topStats">
-        <div class="statPill"><span class="statIcon">⚡</span><span id="energy">0</span></div>
-        <div class="statPill"><span class="statIcon">🔥</span><span id="streak">0</span></div>
-        <div class="statPill"><span class="statIcon">⭐</span><span id="xpTotal">0</span></div>
+      <div class="chips">
+        <div class="chip" title="XP">
+          <span class="chipIco">⚡</span><span id="chipXp">0</span>
+        </div>
+        <div class="chip" title="Streak">
+          <span class="chipIco">🔥</span><span id="chipStreak">0</span>
+        </div>
+        <div class="chip" title="Stars">
+          <span class="chipIco">⭐</span><span id="chipStars">0</span>
+        </div>
       </div>
     </header>
 
     <!-- Tabs -->
     <nav class="tabs" aria-label="Навигация">
-  <button class="tab isActive" data-go="path" type="button">🧭 Путь</button>
-  <button class="tab" data-go="practice" type="button">🎯 Практика</button>
-  <button class="tab" data-go="stats" type="button">📊 Статы</button>
-  <button class="tab" data-go="settings" type="button">⚙️ Настройки</button>
-</nav>
-
+      <button class="tab isActive" data-go="path" type="button">🧭 Путь</button>
+      <button class="tab" data-go="practice" type="button">🎯 Практика</button>
+      <button class="tab" data-go="stats" type="button">📊 Статы</button>
+      <button class="tab" data-go="settings" type="button">⚙️ Настройки</button>
+    </nav>
 
     <!-- Screens -->
-   
+    <main class="screens">
 
       <!-- PATH -->
       <section id="screenPath" class="screen isActive">
-  <div class="card">
-    <div class="sectionKicker">ПУТЬ</div>
-    <h1 class="sectionTitle">Выбирай урок и учи по шагам</h1>
-    <div class="sectionSub">Уроки идут “змейкой”, как в Duolingo — слева/справа по порядку.</div>
+        <div class="card hero">
+          <div class="heroTitle">
+            <h1>Выбирай урок и учи по шагам</h1>
+          </div>
+          <div class="heroSub">
+            Уроки идут «змейкой» (как в Duolingo). Спираль сделаем следующим шагом.
+          </div>
 
-    <div id="pathMap" class="pathMap"></div>
-
-    <div class="pathBottom">
-      <div class="miniStats">
-        <div class="miniStat">
-          <div class="miniLabel">Сегодня</div>
-          <div class="miniValue"><span id="todayXp">0</span> XP</div>
+          <div class="miniRow">
+            <div class="miniStat">
+              <div class="miniLabel">Сегодня</div>
+              <div class="miniValue"><span id="miniTodayXp">0</span> XP</div>
+            </div>
+            <div class="miniStat">
+              <div class="miniLabel">Точность</div>
+              <div class="miniValue"><span id="miniAccuracy">0</span>%</div>
+            </div>
+          </div>
         </div>
-        <div class="miniStat">
-          <div class="miniLabel">Точность</div>
-          <div class="miniValue"><span id="acc">0</span>%</div>
-        </div>
-      </div>
 
-      <button id="btnContinue" class="btnPrimary" type="button">Продолжить</button>
-    </div>
-  </div>
-</section>
+        <div class="pathWrap">
+          <div id="pathList" class="pathList"></div>
+        </div>
+      </section>
+
       <!-- PRACTICE -->
       <section id="screenPractice" class="screen">
-        <div class="taskCard" id="taskCard">
-          <!-- RESULT SHEET -->
-          <div id="resultSheet" class="resultSheet hidden">
-            <div class="resultInner">
-              <div class="resultLeft">
-                <div id="resultTitle" class="resultTitle">Потрясающе!</div>
-                <div id="resultSub" class="resultSub">+10 XP</div>
-              </div>
-
-              <!-- ВАЖНО: теперь id = btnNext, чтобы JS ловил -->
-              <button id="btnResultNext" class="resultBtn">ДАЛЕЕ</button>
-
+        <div class="card practice">
+          <div class="practiceHead">
+            <div class="practiceMeta">
+              <div id="taskBadge" class="badge">Задание</div>
+              <div id="taskTitle" class="practiceTitle">—</div>
             </div>
 
-            <div id="confetti" class="confetti"></div>
+            <button id="btnSpeak" class="speakBtn" type="button" title="Озвучить">🔊</button>
           </div>
 
-          <div class="taskTop">
-            <div class="taskLabel" id="taskLabel">НОВОЕ СЛОВО</div>
-            <div class="taskTitle" id="taskTitle">Переведи предложение</div>
+          <div id="taskPrompt" class="prompt">—</div>
+
+          <div class="slotsWrap">
+            <div id="answerSlots" class="slots" aria-label="Ответ"></div>
           </div>
 
-          <div class="taskBody">
-            <div class="bubble">
-              <button id="btnAudio" class="audioBtn" aria-label="Play" type="button">🔊</button>
-              <div class="bubbleText" id="promptText">Francia y México.</div>
-            </div>
+          <div class="bankWrap">
+            <div class="bankHint">Нажимай на слова ниже 👇</div>
+            <div id="wordBank" class="bank" aria-label="Слова"></div>
+          </div>
 
-            <div class="answerArea" id="answerArea"></div>
-
-            <div class="chips" id="chips"></div>
-
-            <div class="feedback" id="feedback"></div>
-
-            <button id="btnCheck" class="btnPrimary wFull" type="button" disabled>ПРОВЕРИТЬ</button>
+          <div class="actions">
+            <button id="btnCheck" class="btnPrimary" type="button" disabled>ПРОВЕРИТЬ</button>
           </div>
         </div>
       </section>
 
       <!-- STATS -->
       <section id="screenStats" class="screen">
-        <div class="card">
-          <div class="cardTitle">Статы</div>
+        <div class="card stats">
+          <h2>Статы</h2>
           <div class="statsGrid">
-            <div class="statCard"><div class="statName">Всего XP</div><div class="statVal" id="sXp">0</div></div>
-            <div class="statCard"><div class="statName">Streak</div><div class="statVal" id="sStreak">0</div></div>
-            <div class="statCard"><div class="statName">Ответов сегодня</div><div class="statVal" id="sAnswered">0</div></div>
-            <div class="statCard"><div class="statName">Точность сегодня</div><div class="statVal" id="sAcc">0%</div></div>
-            <div class="statCard"><div class="statName">Слов выучено</div><div class="statVal" id="sWords">0</div></div>
+            <div class="statItem">
+              <div class="statLabel">Всего XP</div>
+              <div id="stTotalXp" class="statValue">0</div>
+            </div>
+            <div class="statItem">
+              <div class="statLabel">Streak</div>
+              <div id="stStreak" class="statValue">0</div>
+            </div>
+            <div class="statItem">
+              <div class="statLabel">Ответов сегодня</div>
+              <div id="stAnswersToday" class="statValue">0</div>
+            </div>
+            <div class="statItem">
+              <div class="statLabel">Точность сегодня</div>
+              <div id="stAccuracyToday" class="statValue">0%</div>
+            </div>
+            <div class="statItem">
+              <div class="statLabel">Слов выучено</div>
+              <div id="stWordsLearned" class="statValue">0</div>
+            </div>
           </div>
+
+          <div class="muted">
+            *Если всё внезапно обнулилось раньше — это было из-за кривого импорта/дубликатов переменных.
+            Тут сохранение стабильное.
+          </div>
+        </div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section id="screenSettings" class="screen">
+        <div class="card settings">
+          <h2>Настройки</h2>
+          <div class="muted">Тут всё сервисное: синк, экспорт/импорт, голос и сброс.</div>
+
+          <div class="btnRow">
+            <button id="btnSync" class="btnGhost" type="button">Синк в бота</button>
+            <button id="btnExport" class="btnGhost" type="button">Экспорт</button>
+            <button id="btnImport" class="btnGhost" type="button">Импорт</button>
+            <input id="importFile" type="file" accept="application/json" class="hidden" />
+          </div>
+
+          <div class="settingsBlock">
+            <div class="settingsLabel">Голос (если доступно)</div>
+            <select id="voiceSelect" class="select">
+              <option value="">Авто (лучший испанский)</option>
+            </select>
+          </div>
+
+          <label class="checkRow">
+            <input id="chkAutoSpeak" type="checkbox" />
+            <span>Авто-озвучка в аудио-заданиях</span>
+          </label>
 
           <button id="btnReset" class="btnDanger" type="button">Сбросить прогресс</button>
         </div>
       </section>
+
     </main>
-  </div>
-    <section id="screenSettings" class="screen">
-  <div class="card">
-    <div class="sectionKicker">НАСТРОЙКИ</div>
-    <h1 class="sectionTitle">Настройки</h1>
-    <div class="sectionSub">Тут всё сервисное: синк, экспорт/импорт, голос и сброс.</div>
 
-    <div class="settingsGrid">
-      <button id="btnSync" class="btnGhost" type="button">Синк в бота</button>
-      <button id="btnExport" class="btnGhost" type="button">Экспорт</button>
-      <button id="btnImport" class="btnGhost" type="button">Импорт</button>
+    <!-- Toast -->
+    <div id="toast" class="toast hidden"></div>
+
+    <!-- Result sheet -->
+    <div id="resultSheet" class="resultSheet hidden" role="dialog" aria-label="Результат">
+      <div class="resultLeft">
+        <div id="resultTitle" class="resultTitle">Потрясающе! ✅</div>
+        <div id="resultSub" class="resultSub">+10 XP</div>
+      </div>
+      <button id="btnNext" class="btnNext" type="button">ДАЛЕЕ</button>
     </div>
 
-    <div class="settingsBlock">
-      <div class="settingsRow">
-        <label class="settingsLabel" for="voiceSelect">Голос (если доступно)</label>
-        <select id="voiceSelect" class="settingsSelect"></select>
-      </div>
-
-      <label class="settingsCheck">
-        <input id="autoSpeak" type="checkbox" />
-        Авто-озвучка в аудио-заданиях
-      </label>
-    </div>
-
-    <button id="btnReset" class="btnDanger" type="button">Сбросить прогресс</button>
-  </div>
-</section>
-
-
-  <!-- MODAL -->
-  <div id="modal" class="modal hidden" aria-hidden="true">
-    <div class="modalCard">
-      <div class="modalHead">
-        <div id="modalTitle" class="modalTitle">Заголовок</div>
-        <button id="modalX" class="iconBtn" type="button">✕</button>
-      </div>
-
-      <div id="modalBody" class="modalBody">Текст</div>
-
-      <div class="modalActions">
-        <button id="modalCancel" class="btnGhost" type="button">Отмена</button>
-        <button id="modalOk" class="btnPrimary" type="button">Ок</button>
-      </div>
-    </div>
   </div>
 
-  <script src="app.js?v=3"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
