@@ -17,6 +17,24 @@ function tg() {
 function hasCloudStorage() {
   return !!tg()?.CloudStorage;
 }
+function speakES(text) {
+  if (!text) return;
+
+  // важно: iOS любит, когда это вызвано кликом пользователя
+  window.speechSynthesis.cancel();
+
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "es-ES";
+  u.rate = 0.95;
+
+  // если найдётся испанский голос — подключим
+  const voices = window.speechSynthesis.getVoices();
+  const esVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith("es"));
+  if (esVoice) u.voice = esVoice;
+
+  window.speechSynthesis.speak(u);
+}
+
 
 function cloudGet(key) {
   return new Promise((resolve) => {
@@ -578,6 +596,22 @@ if (btnNext) {
       el("feedback").textContent = "";
     }
   });
+  // ✅ "ДАЛЕЕ" на зелёной плашке результата
+const btnResultNext = el("btnResultNext");
+if (btnResultNext) {
+  btnResultNext.addEventListener("click", () => {
+    hideResultSheet();
+
+    if (lastAnswerWasCorrect) {
+      taskIndex++;
+      animateTaskSwap(() => renderTask());
+    } else {
+      el("btnCheck").disabled = picked.length === 0;
+      el("feedback").textContent = "";
+    }
+  });
+}
+
 }
 
 
