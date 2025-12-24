@@ -826,6 +826,32 @@ async function init() {
     console.warn("⚠️ btnResetSettings не найдена (это нормально, если ещё не зашли в настройки)");
   }
 
+  // Force reload button
+  const btnForceReload = $("btnForceReload");
+  if (btnForceReload) {
+    btnForceReload.addEventListener("click", async () => {
+      showToast("Обновление приложения...", 1500);
+      
+      // Очистка Service Worker кэша
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (let registration of registrations) {
+          await registration.unregister();
+        }
+      }
+      
+      // Очистка всех кэшей
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map(name => caches.delete(name)));
+      }
+      
+      setTimeout(() => {
+        window.location.reload(true);
+      }, 500);
+    });
+  }
+
   // Exit
   const btnExit = $("btnExit");
   if (btnExit) {
