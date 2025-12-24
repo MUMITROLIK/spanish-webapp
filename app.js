@@ -66,12 +66,52 @@ function safeParse(json) {
 }
 
 /* Progress Model */
-function todayKey() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
+/* Progress Model with Timezone Support */
+function getTodayKeyWithTimezone() {
+  // Получаем текущую дату в локальном часовом поясе пользователя
+  const now = new Date();
+  
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+function todayKey() {
+  return getTodayKeyWithTimezone();
+}
+
+function getYesterdayKey() {
+  const now = new Date();
+  // Вычитаем один день
+  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  
+  const y = yesterday.getFullYear();
+  const m = String(yesterday.getMonth() + 1).padStart(2, "0");
+  const day = String(yesterday.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function getDaysDifference(date1Key, date2Key) {
+  // Преобразуем строки формата "YYYY-MM-DD" в даты
+  const [y1, m1, d1] = date1Key.split('-').map(Number);
+  const [y2, m2, d2] = date2Key.split('-').map(Number);
+  
+  const dateA = new Date(y1, m1 - 1, d1);
+  const dateB = new Date(y2, m2 - 1, d2);
+  
+  const diffTime = Math.abs(dateB - dateA);
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  return diffDays;
+}
+
+function saveUserTimezone() {
+  // Вызываем после инициализации progress
+  if (progress && !progress._userTimezone) {
+    progress._userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    progress._timezoneOffset = new Date().getTimezoneOffset();
+  }
 }
 
 function defaultProgress() {
@@ -85,9 +125,11 @@ function defaultProgress() {
     completed: {},
     lessonProgress: {},
     achievements: [],
-    vocab: {},
+    vocab: {}, // ВАЖНО: инициализируем пустым объектом
     dayKey: todayKey(),
-    lastActive: todayKey()
+    lastActive: todayKey(),
+    _userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    _timezoneOffset: new Date().getTimezoneOffset()
   };
 }
 
@@ -252,13 +294,24 @@ window.speechSynthesis.onvoiceschanged = () => {
 function speakES(text) {
   if (!text) return;
   _primeVoicesOnce();
+  
   window.speechSynthesis.cancel();
+  
   const u = new SpeechSynthesisUtterance(text);
   u.lang = "es-ES";
-  u.rate = 0.95;
+  u.rate = 0.85; // Медленнее для лучшего понимания
   u.pitch = 1.0;
-  u.volume = 1.0;
-  u.voice = _bestEsVoice || _pickBestEsVoice() || null;
+  u.volume = 0.9; // Чуть тише
+  
+  const voice = _bestEsVoice || _pickBestEsVoice();
+  if (voice) {
+    u.voice = voice;
+  }
+  
+  // Добавляем обработчики событий для отладки
+  u.onerror = (e) => console.warn("⚠️ TTS error:", e);
+  u.onend = () => console.log("✅ TTS finished");
+  
   window.speechSynthesis.speak(u);
 }
 
@@ -391,12 +444,19 @@ const ACHIEVEMENTS = [
 
 function checkAchievements(prog) {
   const newAchievements = [];
+  
+  // Проверяем, что массив достижений существует
+  if (!prog.achievements) {
+    prog.achievements = [];
+  }
+  
   ACHIEVEMENTS.forEach(a => {
     if (!prog.achievements.includes(a.id) && a.check(prog)) {
       prog.achievements.push(a.id);
       newAchievements.push(a);
     }
   });
+  
   return newAchievements;
 }
 
@@ -418,6 +478,9 @@ let lastAnswerWasCorrect = false;
 let correctStreak = 0;
 let selectedPairs = [];
 let selectedChoice = null;
+let wrongAnswers = []; // Массив неправильных ответов для повторения
+let isReviewMode = false; // Режим повторения ошибок
+let originalTasksCount = 0; // Количество заданий до начала повторения
 
 /* Theme */
 function applyTheme(theme) {
@@ -439,6 +502,7 @@ function setActiveScreen(name) {
     home: $("screenHome"),
     path: $("screenPath"),
     practice: $("screenPractice"),
+    vocab: $("screenVocab"),
     stats: $("screenStats"),
     settings: $("screenSettings"),
   };
@@ -460,13 +524,16 @@ function setActiveScreen(name) {
   });
 
   if (name === "path") renderPath();
+  if (name === "vocab") {
+    console.log('📚 Вызываем renderVocab(), progress.vocab:', progress.vocab);
+    renderVocab();
+  }
   if (name === "stats") { renderTop(); renderAchievements(); }
   if (name === "settings") {
     console.log('⚙️ Вызываем renderSettings()');
     renderSettings();
   }
 }
-
 /* Render UI */
 function renderTop() {
   $("xpTotal").textContent = String(progress.xpTotal);
@@ -495,34 +562,52 @@ function renderPath() {
   list.innerHTML = "";
 
   MODULES.forEach((module, moduleIdx) => {
-    // Module header
+    // Заголовок модуля с прогрессом
     const moduleHeader = document.createElement("div");
     moduleHeader.className = "moduleHeader";
+    const moduleProgress = getModuleProgress(module.id);
+    const isModuleComplete = moduleProgress === module.lessons.length;
+    
     moduleHeader.innerHTML = `
-      <div class="moduleName">${module.name}</div>
-      <div class="moduleProgress">${getModuleProgress(module.id)}/5</div>
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+        <div style="flex: 1;">
+          <div class="moduleName" style="font-size: 20px; font-weight: 800; color: var(--text); margin-bottom: 4px;">
+            ${module.name}
+          </div>
+          <div style="font-size: 14px; color: var(--text-light);">
+            ${moduleProgress} / ${module.lessons.length} уроков
+          </div>
+        </div>
+        ${isModuleComplete ? '<div style="font-size: 32px;">🏆</div>' : ''}
+      </div>
+      <div style="background: var(--bg-gray); height: 8px; border-radius: 999px; overflow: hidden; margin-bottom: 32px;">
+        <div style="height: 100%; width: ${(moduleProgress / module.lessons.length) * 100}%; background: linear-gradient(90deg, ${getModuleColor(module.color)} 0%, ${getModuleColorDark(module.color)} 100%); border-radius: 999px; transition: width 0.5s ease;"></div>
+      </div>
     `;
     list.appendChild(moduleHeader);
 
-    // Module lessons
+    // Уроки модуля
     module.lessons.forEach((l, idx) => {
       const row = document.createElement("div");
       row.className = "pathRow " + (idx % 2 === 0 ? "left" : "right");
 
       const node = document.createElement("button");
       const isCompleted = progress.completed[l.id] === true;
-      const isPrevCompleted = idx === 0 || progress.completed[module.lessons[idx - 1].id];
-      const isLocked = !isPrevCompleted && moduleIdx > 0;
+      const isPrevCompleted = idx === 0 ? (moduleIdx === 0 || getModuleProgress(MODULES[moduleIdx - 1].id) === MODULES[moduleIdx - 1].lessons.length) : progress.completed[module.lessons[idx - 1].id];
+      const isLocked = !isPrevCompleted;
+      const isCurrent = !isCompleted && isPrevCompleted;
       
       node.className = `pathNode pathNode-${module.color}`;
       if (isCompleted) node.classList.add("completed");
       if (isLocked) node.classList.add("locked");
+      if (isCurrent) node.classList.add("current");
       
       node.innerHTML = `
         <div class="nodeIcon">${l.icon}</div>
         <div class="nodeXp">+${l.xp} XP</div>
         ${isCompleted ? '<div class="nodeStars">⭐</div>' : ''}
         ${isLocked ? '<div class="nodeLock">🔒</div>' : ''}
+        ${isCurrent ? '<div class="nodePulse"></div>' : ''}
       `;
 
       if (!isLocked) {
@@ -541,6 +626,127 @@ function renderPath() {
       row.appendChild(node);
       list.appendChild(row);
     });
+  });
+}
+
+function getModuleColor(color) {
+  const colors = {
+    yellow: '#FFC800',
+    purple: '#CE82FF',
+    green: '#58CC02',
+    blue: '#1CB0F6',
+    red: '#FF4B4B'
+  };
+  return colors[color] || colors.green;
+}
+
+function getModuleColorDark(color) {
+  const colors = {
+    yellow: '#E6B000',
+    purple: '#A855F7',
+    green: '#46A302',
+    blue: '#1290C6',
+    red: '#CC3939'
+  };
+  return colors[color] || colors.green;
+}
+
+function renderVocab() {
+  const vocabList = $("vocabList");
+  if (!vocabList) return;
+  
+  vocabList.innerHTML = "";
+  
+  // Инициализируем vocab если его нет
+  if (!progress.vocab) {
+    progress.vocab = {};
+  }
+  
+  const words = Object.entries(progress.vocab)
+    .sort((a, b) => {
+      // Сначала новые слова
+      if (a[1].isNew && !b[1].isNew) return -1;
+      if (!a[1].isNew && b[1].isNew) return 1;
+      // Потом по дате добавления (новые первые)
+      return b[1].firstSeen - a[1].firstSeen;
+    });
+  
+  if (words.length === 0) {
+    vocabList.innerHTML = `
+      <div style="text-align: center; padding: 60px 20px; color: var(--text-light);">
+        <div style="font-size: 64px; margin-bottom: 20px;">📚</div>
+        <div style="font-size: 20px; font-weight: 800; margin-bottom: 12px; color: var(--text);">Словарь пуст</div>
+        <div style="font-size: 16px; line-height: 1.6;">
+          Начни учить слова в уроках,<br>и они появятся здесь!
+        </div>
+      </div>
+    `;
+    return;
+  }
+  
+  // Статистика сверху
+  const statsCard = document.createElement("div");
+  statsCard.style.cssText = `
+    background: linear-gradient(135deg, #CE82FF 0%, #A855F7 100%);
+    border-radius: 20px;
+    padding: 24px;
+    margin-bottom: 24px;
+    color: white;
+  `;
+  
+  const newWordsCount = words.filter(([, data]) => data.isNew).length;
+  const learnedWordsCount = words.filter(([, data]) => !data.isNew).length;
+  
+  statsCard.innerHTML = `
+    <div style="font-size: 16px; opacity: 0.9; margin-bottom: 16px;">Твой прогресс</div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+      <div style="background: rgba(255,255,255,0.2); padding: 16px; border-radius: 12px; backdrop-filter: blur(10px);">
+        <div style="font-size: 32px; font-weight: 800; margin-bottom: 4px;">${newWordsCount}</div>
+        <div style="font-size: 13px; opacity: 0.9;">Новых слов</div>
+      </div>
+      <div style="background: rgba(255,255,255,0.2); padding: 16px; border-radius: 12px; backdrop-filter: blur(10px);">
+        <div style="font-size: 32px; font-weight: 800; margin-bottom: 4px;">${learnedWordsCount}</div>
+        <div style="font-size: 13px; opacity: 0.9;">Изучено</div>
+      </div>
+    </div>
+  `;
+  
+  vocabList.appendChild(statsCard);
+  
+  // Список слов
+  words.forEach(([key, data]) => {
+    const wordCard = document.createElement("div");
+    wordCard.className = "vocabCard";
+    
+    if (data.isNew) {
+      wordCard.style.borderLeft = "4px solid #CE82FF";
+    }
+    
+    const date = new Date(data.firstSeen);
+    const dateStr = date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+    
+    wordCard.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+        <div style="flex: 1;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+            <div style="font-size: 22px; font-weight: 800; color: var(--text);">
+              ${data.spanish || data.word}
+            </div>
+            ${data.isNew ? '<span style="background: linear-gradient(135deg, #CE82FF 0%, #A855F7 100%); color: white; font-size: 10px; font-weight: 800; padding: 4px 8px; border-radius: 6px; text-transform: uppercase;">Новое</span>' : ''}
+          </div>
+          <div style="font-size: 13px; color: var(--text-light); display: flex; align-items: center; gap: 12px;">
+            <span>✅ ${data.timesCorrect} раз</span>
+            <span>•</span>
+            <span>📅 ${dateStr}</span>
+          </div>
+        </div>
+        <button class="iconBtn" onclick="speakES('${data.spanish || data.word}'); vibrate(50);" style="flex-shrink: 0;">
+          🔊
+        </button>
+      </div>
+    `;
+    
+    vocabList.appendChild(wordCard);
   });
 }
 
@@ -572,6 +778,44 @@ function renderAchievements() {
 function renderSettings() {
   console.log('renderSettings called', settings);
   
+  // Обновляем информацию о часовом поясе
+  const timezoneDisplay = $("timezoneDisplay");
+  const currentTimeDisplay = $("currentTimeDisplay");
+  const todayKeyDisplay = $("todayKeyDisplay");
+  const lastActiveDisplay = $("lastActiveDisplay");
+  const streakDisplay = $("streakDisplay");
+  
+  if (timezoneDisplay) {
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const offset = -new Date().getTimezoneOffset() / 60;
+    const offsetStr = offset >= 0 ? `+${offset}` : offset;
+    timezoneDisplay.textContent = `${timezone} (UTC${offsetStr})`;
+  }
+  
+  if (currentTimeDisplay) {
+    const now = new Date();
+    currentTimeDisplay.textContent = now.toLocaleString('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  }
+  
+  if (todayKeyDisplay) {
+    todayKeyDisplay.textContent = todayKey();
+  }
+  
+  if (lastActiveDisplay) {
+    lastActiveDisplay.textContent = progress.lastActive || 'никогда';
+  }
+  
+  if (streakDisplay) {
+    streakDisplay.textContent = `${progress.streak} ${getDaysWord(progress.streak)}`;
+  }
+  
   // Theme buttons
   const themeBtns = document.querySelectorAll('.themeBtn');
   console.log('Found theme buttons:', themeBtns.length);
@@ -601,20 +845,88 @@ function renderSettings() {
       };
     }
   });
+  
+  console.log('⏰ Timezone info:', {
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    offset: -new Date().getTimezoneOffset() / 60,
+    today: todayKey(),
+    lastActive: progress.lastActive,
+    streak: progress.streak
+  });
 }
 
 function renderTask() {
-  currentTask = TASKS[taskIndex % TASKS.length];
+  // Используем задания текущего урока или все задания
+  const tasksPool = currentLessonTasks.length > 0 ? currentLessonTasks : TASKS;
+  
+  if (taskIndex >= tasksPool.length) {
+    // Урок завершен!
+    if (progress._activeLessonId) {
+      const lesson = lessons.find(l => l.id === progress._activeLessonId);
+      progress.completed[progress._activeLessonId] = true;
+      progress.xpTotal += lesson ? lesson.xp : 20;
+      saveProgress(progress);
+      
+      showToast(`🎉 Урок завершен! +${lesson ? lesson.xp : 20} XP`, 3000);
+      setTimeout(() => {
+        setActiveScreen("path");
+      }, 2000);
+    } else {
+      showToast("✅ Все задания выполнены!");
+      setActiveScreen("home");
+    }
+    return;
+  }
+  
+  currentTask = tasksPool[taskIndex];
   picked = [];
+  selectedChoice = null;
+  selectedPairs = [];
 
-  $("taskLabel").textContent = currentTask.label;
-  $("taskTitle").textContent = currentTask.title;
-  $("promptText").textContent = currentTask.prompt;
+  $("taskLabel").textContent = currentTask.label || "ЗАДАНИЕ";
+  $("taskTitle").textContent = currentTask.title || "Переведи";
+  $("promptText").textContent = currentTask.prompt || "";
 
+  // Очищаем все контейнеры
   const chips = $("chips");
+  const answerArea = $("answerArea");
   chips.innerHTML = "";
+  answerArea.innerHTML = "";
 
-  currentTask.words.forEach((w, idx) => {
+  // Рендерим в зависимости от типа задания
+  switch (currentTask.type) {
+    case "translate":
+    case "audio":
+    case "fill":
+      renderTranslateTask();
+      break;
+      
+    case "choice":
+    case "image":
+      renderChoiceTask();
+      break;
+      
+    case "match":
+      renderMatchTask();
+      break;
+      
+    case "type":
+      renderTypeTask();
+      break;
+      
+    default:
+      renderTranslateTask();
+  }
+
+  $("feedback").textContent = "";
+  $("btnCheck").disabled = true;
+}
+
+function renderTranslateTask() {
+  const chips = $("chips");
+  const words = currentTask.words || [];
+  
+  words.forEach((w, idx) => {
     const b = document.createElement("button");
     b.className = "chip";
     b.textContent = w;
@@ -634,8 +946,298 @@ function renderTask() {
   });
 
   renderAnswer();
-  $("feedback").textContent = "";
-  $("btnCheck").disabled = true;
+}
+
+function renderChoiceTask() {
+  const chips = $("chips");
+  chips.innerHTML = "";
+  
+  const choicesContainer = document.createElement("div");
+  choicesContainer.className = "choices";
+  
+  (currentTask.choices || []).forEach((choice, idx) => {
+    const btn = document.createElement("button");
+    btn.className = "choiceBtn";
+    btn.textContent = choice.text;
+    btn.dataset.idx = String(idx);
+    
+    btn.addEventListener("click", () => {
+      vibrate(50);
+      document.querySelectorAll(".choiceBtn").forEach(b => b.classList.remove("selected"));
+      btn.classList.add("selected");
+      selectedChoice = idx;
+      $("btnCheck").disabled = false;
+    });
+    
+    choicesContainer.appendChild(btn);
+  });
+  
+  chips.appendChild(choicesContainer);
+  
+  const answerArea = $("answerArea");
+  answerArea.innerHTML = '<div class="answerHint">Выбери правильный ответ</div>';
+}
+
+function renderMatchTask() {
+  const chips = $("chips");
+  chips.innerHTML = "";
+  
+  const matchContainer = document.createElement("div");
+  matchContainer.className = "matchPairs";
+  matchContainer.innerHTML = '<div class="matchHint">Соедини пары</div>';
+  
+  const leftColumn = document.createElement("div");
+  leftColumn.className = "matchColumn";
+  
+  const rightColumn = document.createElement("div");
+  rightColumn.className = "matchColumn";
+  
+  const pairs = currentTask.pairs || [];
+  const shuffledRight = [...pairs].sort(() => Math.random() - 0.5);
+  
+  pairs.forEach((pair, idx) => {
+    const leftBtn = document.createElement("button");
+    leftBtn.className = "matchBtn";
+    leftBtn.textContent = pair.spanish;
+    leftBtn.dataset.idx = String(idx);
+    leftBtn.dataset.side = "left";
+    
+    leftBtn.addEventListener("click", () => handleMatchClick(leftBtn, idx, "left"));
+    leftColumn.appendChild(leftBtn);
+  });
+  
+  shuffledRight.forEach((pair, idx) => {
+    const rightIdx = pairs.findIndex(p => p.russian === pair.russian);
+    const rightBtn = document.createElement("button");
+    rightBtn.className = "matchBtn";
+    rightBtn.textContent = pair.russian;
+    rightBtn.dataset.idx = String(rightIdx);
+    rightBtn.dataset.side = "right";
+    
+    rightBtn.addEventListener("click", () => handleMatchClick(rightBtn, rightIdx, "right"));
+    rightColumn.appendChild(rightBtn);
+  });
+  
+  matchContainer.appendChild(leftColumn);
+  matchContainer.appendChild(rightColumn);
+  chips.appendChild(matchContainer);
+  
+  const answerArea = $("answerArea");
+  answerArea.innerHTML = '<div class="answerHint">Нажми на испанское слово, затем на его перевод</div>';
+}
+
+let matchSelection = null;
+/* Review Mode */
+function startReviewMode() {
+  isReviewMode = true;
+  currentLessonTasks = [...wrongAnswers];
+  wrongAnswers = [];
+  taskIndex = 0;
+  
+  showToast(`📝 Повторим ошибки (${currentLessonTasks.length} заданий)`, 2500);
+  
+  setTimeout(() => {
+    animateTaskSwap(() => renderTask());
+  }, 2000);
+}
+
+function finishLesson() {
+  if (progress._activeLessonId) {
+    const lesson = lessons.find(l => l.id === progress._activeLessonId);
+    progress.completed[progress._activeLessonId] = true;
+    progress.xpTotal += lesson ? lesson.xp : 20;
+    
+    // Проверяем серию (streak)
+    updateStreak();
+    
+    saveProgress(progress);
+    
+    // Показываем экран завершения урока
+    showLessonCompleteScreen(lesson);
+  } else {
+    showToast("✅ Все задания выполнены!");
+    setActiveScreen("home");
+  }
+}
+
+function updateStreak() {
+  const today = todayKey();
+  const yesterday = getYesterdayKey();
+  
+  console.log('🔥 Проверка streak:', {
+    today,
+    yesterday,
+    lastActive: progress.lastActive,
+    currentStreak: progress.streak
+  });
+  
+  // Если уже занимались сегодня, серия не меняется
+  if (progress.lastActive === today) {
+    console.log('✅ Уже занимались сегодня, streak не меняется');
+    return;
+  }
+  
+  // Если занимались вчера, продолжаем серию
+  if (progress.lastActive === yesterday) {
+    progress.streak++;
+    console.log('🔥 Занимались вчера, продолжаем серию:', progress.streak);
+  } 
+  // Если это первое занятие или пропустили день
+  else if (!progress.lastActive || progress.lastActive === '') {
+    progress.streak = 1;
+    console.log('⭐ Первое занятие, начинаем серию');
+  }
+  // Если пропустили больше одного дня
+  else {
+    const daysSinceLastActive = getDaysDifference(progress.lastActive, today);
+    console.log('📅 Дней с последнего занятия:', daysSinceLastActive);
+    
+    if (daysSinceLastActive === 1) {
+      // Вчера
+      progress.streak++;
+      console.log('🔥 Продолжаем серию:', progress.streak);
+    } else {
+      // Пропустили день(и)
+      progress.streak = 1;
+      console.log('💔 Пропустили день, сбрасываем серию');
+    }
+  }
+  
+  progress.lastActive = today;
+  saveProgress(progress);
+}
+
+function getYesterdayKey() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function showLessonCompleteScreen(lesson) {
+  const modal = $("modal");
+  const modalCard = modal.querySelector(".modalCard");
+  
+  modalCard.innerHTML = `
+    <div style="padding: 40px; text-align: center; background: linear-gradient(135deg, #58CC02 0%, #46A302 100%); border-radius: 20px;">
+      <div style="font-size: 80px; margin-bottom: 20px;">🎉</div>
+      <div style="font-size: 32px; font-weight: 800; color: white; margin-bottom: 12px;">
+        Урок завершён!
+      </div>
+      <div style="font-size: 20px; color: rgba(255,255,255,0.9); margin-bottom: 24px;">
+        ${lesson ? lesson.title : 'Отличная работа'}
+      </div>
+      <div style="background: rgba(255,255,255,0.2); padding: 20px; border-radius: 16px; backdrop-filter: blur(10px); margin-bottom: 24px;">
+        <div style="font-size: 48px; font-weight: 800; color: white;">
+          +${lesson ? lesson.xp : 20} XP
+        </div>
+      </div>
+      ${progress.streak > 0 ? `
+        <div style="background: rgba(255,255,255,0.2); padding: 16px; border-radius: 16px; backdrop-filter: blur(10px); margin-bottom: 24px;">
+          <div style="font-size: 40px; margin-bottom: 8px;">🔥</div>
+          <div style="font-size: 24px; font-weight: 700; color: white;">
+            Серия: ${progress.streak} ${getDaysWord(progress.streak)}
+          </div>
+          <div style="font-size: 14px; color: rgba(255,255,255,0.8); margin-top: 4px;">
+            Огонь не угасает!
+          </div>
+        </div>
+      ` : ''}
+      <button class="btnPrimary" onclick="closeModal(); setActiveScreen('path');" style="width: 100%; background: white; color: var(--duo-green); margin-top: 8px;">
+        Продолжить обучение
+      </button>
+    </div>
+  `;
+  
+  modal.classList.remove("hidden");
+  fireConfetti();
+  playSound('correct');
+  vibrate('success');
+}
+
+function getDaysWord(days) {
+  if (days % 10 === 1 && days % 100 !== 11) return 'день';
+  if ([2, 3, 4].includes(days % 10) && ![12, 13, 14].includes(days % 100)) return 'дня';
+  return 'дней';
+}
+
+function handleMatchClick(btn, idx, side) {
+  if (btn.classList.contains("matched")) return;
+  
+  vibrate(50);
+  
+  if (!matchSelection) {
+    matchSelection = { idx, side, btn };
+    btn.classList.add("selected");
+  } else {
+    if (matchSelection.side === side) {
+      matchSelection.btn.classList.remove("selected");
+      matchSelection = { idx, side, btn };
+      btn.classList.add("selected");
+    } else {
+      if (matchSelection.idx === idx) {
+        matchSelection.btn.classList.remove("selected");
+        matchSelection.btn.classList.add("matched");
+        btn.classList.add("matched");
+        selectedPairs.push({ left: matchSelection.idx, right: idx });
+        
+        playSound('correct');
+        vibrate('success');
+        
+        matchSelection = null;
+        
+        if (selectedPairs.length === currentTask.pairs.length) {
+          $("btnCheck").disabled = false;
+        }
+      } else {
+        matchSelection.btn.classList.add("wrong");
+        btn.classList.add("wrong");
+        
+        playSound('wrong');
+        vibrate('error');
+        
+        setTimeout(() => {
+          matchSelection.btn.classList.remove("selected", "wrong");
+          btn.classList.remove("wrong");
+          matchSelection = null;
+        }, 500);
+      }
+    }
+  }
+}
+
+function renderTypeTask() {
+  const chips = $("chips");
+  chips.innerHTML = "";
+  
+  const typeContainer = document.createElement("div");
+  typeContainer.className = "typeInput";
+  
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "typeAnswer";
+  input.id = "typeAnswer";
+  input.placeholder = "Напиши ответ...";
+  
+  input.addEventListener("input", () => {
+    $("btnCheck").disabled = input.value.trim().length === 0;
+  });
+  
+  input.addEventListener("keypress", (e) => {
+    if (e.key === "Enter" && input.value.trim().length > 0) {
+      checkAnswer();
+    }
+  });
+  
+  typeContainer.appendChild(input);
+  chips.appendChild(typeContainer);
+  
+  const answerArea = $("answerArea");
+  answerArea.innerHTML = '<div class="answerHint">Введи перевод</div>';
+  
+  setTimeout(() => input.focus(), 100);
 }
 
 function renderAnswer() {
@@ -764,22 +1366,22 @@ async function checkAnswer() {
     case "fill":
     case "audio":
       const userArr = picked.map(x => x.w);
-      const correctArr = currentTask.correct || currentTask.words;
+      const correctArr = currentTask.correct || currentTask.words || [];
       ok = JSON.stringify(userArr) === JSON.stringify(correctArr);
       break;
       
     case "choice":
     case "image":
-      ok = currentTask.choices[selectedChoice]?.correct === true;
+      ok = currentTask.choices && currentTask.choices[selectedChoice]?.correct === true;
       break;
       
     case "match":
-      ok = selectedPairs.length === currentTask.pairs.length;
+      ok = selectedPairs.length === (currentTask.pairs?.length || 0);
       break;
       
     case "type":
-      const userAnswer = $("typeAnswer")?.value.trim().toLowerCase();
-      const correctAnswer = currentTask.correctAnswer.toLowerCase();
+      const userAnswer = $("typeAnswer")?.value.trim().toLowerCase() || "";
+      const correctAnswer = (currentTask.correctAnswer || "").toLowerCase();
       ok = userAnswer === correctAnswer;
       break;
   }
@@ -792,9 +1394,8 @@ async function checkAnswer() {
     progress.correctToday++;
     progress.xpTotal += 10;
     
-    if (progress._activeLessonId) {
-      progress.completed[progress._activeLessonId] = true;
-    }
+    // Подсветка новых слов фиолетовым
+    highlightNewWords();
     
     showResultSheet({
       ok: true,
@@ -809,7 +1410,13 @@ async function checkAnswer() {
       }, 1500);
     }
   } else {
-    correctStreak = 0; // Сбрасываем серию при ошибке
+    correctStreak = 0;
+    
+    // Добавляем неправильный ответ для повторения
+    if (!isReviewMode && !wrongAnswers.find(t => t === currentTask)) {
+      wrongAnswers.push(currentTask);
+    }
+    
     showResultSheet({
       ok: false,
       title: "Не засчитано 😅",
@@ -821,12 +1428,161 @@ async function checkAnswer() {
   renderTop();
   await saveProgress(progress);
 }
-
+/* Highlight New Words */
+/* Highlight New Words */
+function highlightNewWords() {
+  console.log('🔤 highlightNewWords вызвана для задания:', currentTask);
+  
+  if (!currentTask) {
+    console.log('❌ currentTask не определен');
+    return;
+  }
+  
+  // Инициализируем vocab если его нет
+  if (!progress.vocab) {
+    progress.vocab = {};
+    console.log('📚 Инициализирован пустой vocab');
+  }
+  
+  let wordsToAdd = [];
+  
+  // Извлекаем слова в зависимости от типа задания
+  console.log('📋 Тип задания:', currentTask.type);
+  
+  switch (currentTask.type) {
+    case "translate":
+    case "audio":
+    case "fill":
+      // Из prompt (испанский текст)
+      if (currentTask.prompt) {
+        console.log('📝 Prompt:', currentTask.prompt);
+        wordsToAdd.push(...currentTask.prompt.split(' '));
+      }
+      break;
+      
+    case "choice":
+    case "image":
+      if (currentTask.prompt) {
+        console.log('📝 Prompt:', currentTask.prompt);
+        wordsToAdd.push(...currentTask.prompt.split(' '));
+      }
+      break;
+      
+    case "match":
+      if (currentTask.pairs) {
+        currentTask.pairs.forEach(pair => {
+          console.log('🔗 Пара:', pair.spanish);
+          wordsToAdd.push(pair.spanish);
+        });
+      }
+      break;
+      
+    case "type":
+      if (currentTask.correctAnswer) {
+        console.log('✍️ Правильный ответ:', currentTask.correctAnswer);
+        wordsToAdd.push(...currentTask.correctAnswer.split(' '));
+      }
+      break;
+  }
+  
+  console.log('📦 Слова для добавления:', wordsToAdd);
+  
+  // Обрабатываем каждое слово
+  const newWords = [];
+  wordsToAdd.forEach(word => {
+    const cleanWord = word.toLowerCase()
+      .replace(/[¿?¡!,.:;()]/g, '') // Убираем пунктуацию
+      .trim();
+    
+    if (!cleanWord || cleanWord.length < 2) {
+      console.log('⏭️ Пропускаем короткое слово:', word);
+      return;
+    }
+    
+    if (!progress.vocab[cleanWord]) {
+      progress.vocab[cleanWord] = {
+        word: word,
+        spanish: word,
+        firstSeen: Date.now(),
+        timesCorrect: 1,
+        isNew: true
+      };
+      newWords.push(word);
+      console.log('✨ Добавлено новое слово:', cleanWord, progress.vocab[cleanWord]);
+    } else {
+      progress.vocab[cleanWord].timesCorrect++;
+      // Помечаем как не новое после 3 правильных ответов
+      if (progress.vocab[cleanWord].timesCorrect >= 3) {
+        progress.vocab[cleanWord].isNew = false;
+      }
+      console.log('📈 Обновлено слово:', cleanWord, progress.vocab[cleanWord]);
+    }
+  });
+  
+  // Обновляем счетчик изученных слов
+  progress.wordsLearned = Object.keys(progress.vocab).length;
+  console.log('📊 Всего слов в словаре:', progress.wordsLearned);
+  
+  // Показываем уведомления о новых словах
+  if (newWords.length > 0) {
+    console.log('🎉 Новые слова для уведомлений:', newWords);
+    setTimeout(() => {
+      newWords.forEach((word, idx) => {
+        setTimeout(() => {
+          showNewWordNotification(word);
+        }, idx * 500);
+      });
+    }, 800);
+  }
+  
+  saveProgress(progress);
+}
+function showNewWordNotification(word) {
+  const bubble = document.querySelector('.bubble');
+  if (!bubble) return;
+  
+  const wordSpan = document.createElement('span');
+  wordSpan.textContent = word;
+  wordSpan.style.cssText = `
+    display: inline-block;
+    background: linear-gradient(135deg, #CE82FF 0%, #A855F7 100%);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 14px;
+    margin: 0 4px;
+    animation: newWordPulse 0.5s ease;
+  `;
+  
+  // Добавляем анимацию
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes newWordPulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+  `;
+  document.head.appendChild(style);
+}
 /* Start Practice */
 function startPractice(lessonId = null) {
   if (lessonId) {
     progress._activeLessonId = lessonId;
+    // Получаем задания для конкретного урока
+    currentLessonTasks = getTasksForLesson(lessonId);
+    taskIndex = 0;
+    
+    if (currentLessonTasks.length === 0) {
+      showToast("❌ Для этого урока пока нет заданий");
+      return;
+    }
+  } else {
+    // Если урок не указан, используем все задания
+    currentLessonTasks = TASKS;
+    taskIndex = 0;
   }
+  
   setActiveScreen("practice");
   animateTaskSwap(() => renderTask());
 }
@@ -878,8 +1634,13 @@ async function init() {
   progress = await loadProgress();
   settings = await loadSettings();
   
+  // Сохраняем часовой пояс пользователя
+  saveUserTimezone();
+  
   ensureDay(progress);
   await saveProgress(progress);
+  
+  // ... остальной код
   
   applyTheme(settings.theme);
   renderTop();
@@ -941,19 +1702,35 @@ async function init() {
     });
   }
 
-  const btnResultNext = $("btnResultNext");
-  if (btnResultNext) {
-    btnResultNext.addEventListener("click", () => {
-      hideResultSheet();
-      if (lastAnswerWasCorrect) {
-        taskIndex++;
-        animateTaskSwap(() => renderTask());
+const btnResultNext = $("btnResultNext");
+if (btnResultNext) {
+  btnResultNext.addEventListener("click", () => {
+    hideResultSheet();
+    if (lastAnswerWasCorrect) {
+      taskIndex++;
+      
+      // Проверяем, закончились ли основные задания
+      if (!isReviewMode && taskIndex >= currentLessonTasks.length) {
+        if (wrongAnswers.length > 0) {
+          // Начинаем режим повторения ошибок
+          startReviewMode();
+        } else {
+          // Урок полностью завершен
+          finishLesson();
+        }
+      } else if (isReviewMode && taskIndex >= currentLessonTasks.length) {
+        // Повторение завершено
+        finishLesson();
       } else {
-        $("btnCheck").disabled = picked.length === 0;
-        $("feedback").textContent = "";
+        animateTaskSwap(() => renderTask());
       }
-    });
-  }
+    } else {
+      // При ошибке разрешаем попробовать снова
+      $("btnCheck").disabled = false;
+      $("feedback").textContent = "";
+    }
+  });
+}
 
   // Stats & Settings - только одна кнопка сброса в настройках
   const btnResetSettings = $("btnResetSettings");

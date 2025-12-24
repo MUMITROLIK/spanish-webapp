@@ -1295,6 +1295,90 @@ body {
   display: none;
 }
 
+/* Current Lesson Pulse */
+.pathNode.current {
+  position: relative;
+  animation: currentBounce 2s ease-in-out infinite;
+}
+
+@keyframes currentBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.nodePulse {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 12px;
+  height: 12px;
+  background: var(--duo-green);
+  border-radius: 50%;
+  animation: pulsate 1.5s ease-in-out infinite;
+}
+
+@keyframes pulsate {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.5); opacity: 0.5; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Module Header */
+.moduleHeader {
+  margin: 40px 0 20px;
+  padding: 0 20px;
+}
+
+.moduleName {
+  background: linear-gradient(135deg, var(--duo-blue) 0%, var(--duo-purple) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Better Path Connecting Lines */
+.pathRow::after {
+  background: linear-gradient(180deg, var(--border) 0%, transparent 100%);
+}
+
+.pathRow.left::before,
+.pathRow.right::before {
+  border-color: var(--border);
+  opacity: 0.5;
+}
+
+/* Vocabulary Word Highlight */
+.wordHighlight {
+  background: linear-gradient(135deg, #CE82FF 0%, #A855F7 100%);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-weight: 700;
+  display: inline-block;
+  margin: 0 2px;
+}
+
+/* Vocabulary */
+.vocabList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vocabCard {
+  background: var(--bg);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: var(--shadow);
+  border-left: 4px solid transparent;
+  transition: all 0.3s;
+}
+
+.vocabCard:hover {
+  transform: translateX(4px);
+  box-shadow: var(--shadow-lg);
+}
+
 /* Mobile */
 @media (max-width: 600px) {
   .heroTitle { font-size: 24px; }
