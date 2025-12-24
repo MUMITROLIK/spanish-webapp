@@ -271,33 +271,87 @@ const lessons = [
 ];
 
 const TASKS = [
+  // 1. Переведи предложение (собери слова)
   {
+    type: "translate",
     label: "НОВОЕ СЛОВО",
     title: "Переведи предложение",
     prompt: "Francia y México.",
+    image: "🗺️",
     words: ["Франция", "и", "Мексика"],
     correct: ["Франция", "и", "Мексика"]
   },
+  // 2. Закончи предложение
   {
+    type: "fill",
     label: "ЗАКОНЧИТЕ ПРЕДЛОЖЕНИЕ",
     title: "Собери фразу",
     prompt: "Sí, yo soy de __.",
+    image: "🗼",
     words: ["Франция", "Мексика", "taco", "gracias", "chao"],
     correct: ["Франция"]
   },
+  // 3. Аудио (что услышали)
   {
+    type: "audio",
     label: "АУДИО",
     title: "Что вы услышали?",
     prompt: "Yo soy Ana, encantada.",
+    image: null,
     words: ["Yo", "soy", "Ana", "encantada", "helado", "tú"],
     correct: ["Yo", "soy", "Ana", "encantada"]
   },
+  // 4. Выбор из вариантов (multiple choice)
   {
-    label: "ВЫБЕРИ ПРАВИЛЬНЫЙ ПЕРЕВОД",
-    title: "Что означает это слово?",
-    prompt: "¿Qué significa 'Hola'?",
-    words: ["Привет", "Пока", "Спасибо", "Пожалуйста"],
-    correct: ["Привет"]
+    type: "choice",
+    label: "ВЫБЕРИТЕ ПРАВИЛЬНЫЙ ПЕРЕВОД",
+    title: "Что означает 'Hola'?",
+    prompt: "Hola",
+    image: "👋",
+    choices: [
+      { text: "Привет", correct: true },
+      { text: "Пока", correct: false },
+      { text: "Спасибо", correct: false },
+      { text: "Пожалуйста", correct: false }
+    ]
+  },
+  // 5. Сопоставление пар
+  {
+    type: "match",
+    label: "СОПОСТАВЬТЕ ПАРЫ",
+    title: "Соедини слова с переводами",
+    prompt: null,
+    image: "🔗",
+    pairs: [
+      { spanish: "Hola", russian: "Привет" },
+      { spanish: "Adiós", russian: "Пока" },
+      { spanish: "Gracias", russian: "Спасибо" },
+      { spanish: "Por favor", russian: "Пожалуйста" }
+    ]
+  },
+  // 6. Заполни пропуск (клавиатура)
+  {
+    type: "type",
+    label: "НАПИШИТЕ ПО-ИСПАНСКИ",
+    title: "Переведи фразу",
+    prompt: "Привет",
+    image: "✍️",
+    correctAnswer: "hola"
+  },
+  // 7. Картинка → слово
+  {
+    type: "image",
+    label: "ЧТО ЭТО?",
+    title: "Выбери правильное слово",
+    prompt: null,
+    image: "☕",
+    imageDesc: "Чашка кофе",
+    choices: [
+      { text: "café", correct: true },
+      { text: "agua", correct: false },
+      { text: "leche", correct: false },
+      { text: "té", correct: false }
+    ]
   }
 ];
 
@@ -330,12 +384,15 @@ function showAchievement(achievement) {
 
 /* State */
 let progress = defaultProgress();
-let settings = defaultSettings(); // Инициализируем сразу значениями по умолчанию
+let settings = defaultSettings();
 let activeScreen = "home";
 let taskIndex = 0;
 let currentTask = TASKS[0];
 let picked = [];
 let lastAnswerWasCorrect = false;
+let correctStreak = 0; // Счётчик правильных ответов подряд
+let selectedPairs = []; // Для сопоставления пар
+let selectedChoice = null; // Для выбора из вариантов
 
 /* Theme */
 function applyTheme(theme) {
@@ -582,21 +639,41 @@ function clearConfetti() {
 
 function fireConfetti() {
   clearConfetti();
-  const pieces = 30;
+  const pieces = 50; // Больше частиц!
   const box = $("confetti");
-  const colors = ['#58CC02', '#1CB0F6', '#FFC800', '#CE82FF', '#FF4B4B'];
+  const colors = ['#58CC02', '#1CB0F6', '#FFC800', '#CE82FF', '#FF4B4B', '#FF6B9D'];
+  const shapes = ['❤️', '⭐', '✨', '🎉', '🎊', '💚', '💙', '💛', '💜'];
 
   for (let i = 0; i < pieces; i++) {
     const p = document.createElement("div");
     p.className = "confettiPiece";
+    
+    // Случайная позиция по горизонтали
     p.style.left = Math.random() * 100 + "%";
-    p.style.background = colors[Math.floor(Math.random() * colors.length)];
-    p.style.animationDelay = (Math.random() * 0.2) + "s";
+    
+    // Случайный цвет или эмодзи
+    if (Math.random() > 0.5) {
+      p.textContent = shapes[Math.floor(Math.random() * shapes.length)];
+      p.style.fontSize = (10 + Math.random() * 20) + "px";
+    } else {
+      p.style.background = colors[Math.floor(Math.random() * colors.length)];
+      p.style.width = (8 + Math.random() * 12) + "px";
+      p.style.height = (8 + Math.random() * 12) + "px";
+    }
+    
+    // Случайная форма
     p.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+    
+    // Случайная задержка
+    p.style.animationDelay = (Math.random() * 0.3) + "s";
+    
+    // Случайная длительность
+    p.style.animationDuration = (0.8 + Math.random() * 0.6) + "s";
+    
     box.appendChild(p);
   }
 
-  setTimeout(clearConfetti, 1300);
+  setTimeout(clearConfetti, 1500);
 }
 
 /* Result Sheet */
@@ -630,17 +707,41 @@ function hideResultSheet() {
 /* Check Answer */
 async function checkAnswer() {
   progress.answeredToday++;
-  const userArr = picked.map(x => x.w);
-  const correctArr = currentTask.correct || currentTask.words;
-  const ok = JSON.stringify(userArr) === JSON.stringify(correctArr);
+  let ok = false;
+
+  switch (currentTask.type) {
+    case "translate":
+    case "fill":
+    case "audio":
+      const userArr = picked.map(x => x.w);
+      const correctArr = currentTask.correct || currentTask.words;
+      ok = JSON.stringify(userArr) === JSON.stringify(correctArr);
+      break;
+      
+    case "choice":
+    case "image":
+      ok = currentTask.choices[selectedChoice]?.correct === true;
+      break;
+      
+    case "match":
+      ok = selectedPairs.length === currentTask.pairs.length;
+      break;
+      
+    case "type":
+      const userAnswer = $("typeAnswer")?.value.trim().toLowerCase();
+      const correctAnswer = currentTask.correctAnswer.toLowerCase();
+      ok = userAnswer === correctAnswer;
+      break;
+  }
+
   lastAnswerWasCorrect = ok;
   $("btnCheck").disabled = true;
 
   if (ok) {
+    correctStreak++;
     progress.correctToday++;
     progress.xpTotal += 10;
     
-    // Mark lesson as completed
     if (progress._activeLessonId) {
       progress.completed[progress._activeLessonId] = true;
     }
@@ -651,7 +752,6 @@ async function checkAnswer() {
       sub: "+10 XP"
     });
     
-    // Check achievements
     const newAchievements = checkAchievements(progress);
     if (newAchievements.length > 0) {
       setTimeout(() => {
@@ -659,6 +759,7 @@ async function checkAnswer() {
       }, 1500);
     }
   } else {
+    correctStreak = 0; // Сбрасываем серию при ошибке
     showResultSheet({
       ok: false,
       title: "Не засчитано 😅",
