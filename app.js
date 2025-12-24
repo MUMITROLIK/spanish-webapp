@@ -262,98 +262,122 @@ function speakES(text) {
   window.speechSynthesis.speak(u);
 }
 
-/* Lessons & Tasks */
-const lessons = [
-  { id: 1, title: "Урок 1", sub: "Заказывайте в кафе", xp: 20, icon: "🧩", done: false },
-  { id: 2, title: "Урок 2", sub: "Приветствия", xp: 20, icon: "🧠", done: false },
-  { id: 3, title: "Урок 3", sub: "Происхождение", xp: 20, icon: "🧪", done: false },
-  { id: 4, title: "Урок 4", sub: "Покупки", xp: 20, icon: "🛒", done: false },
-];
-
-const TASKS = [
-  // 1. Переведи предложение (собери слова)
+/* Lessons organized in modules */
+const MODULES = [
   {
-    type: "translate",
-    label: "НОВОЕ СЛОВО",
-    title: "Переведи предложение",
-    prompt: "Francia y México.",
-    image: "🗺️",
-    words: ["Франция", "и", "Мексика"],
-    correct: ["Франция", "и", "Мексика"]
-  },
-  // 2. Закончи предложение
-  {
-    type: "fill",
-    label: "ЗАКОНЧИТЕ ПРЕДЛОЖЕНИЕ",
-    title: "Собери фразу",
-    prompt: "Sí, yo soy de __.",
-    image: "🗼",
-    words: ["Франция", "Мексика", "taco", "gracias", "chao"],
-    correct: ["Франция"]
-  },
-  // 3. Аудио (что услышали)
-  {
-    type: "audio",
-    label: "АУДИО",
-    title: "Что вы услышали?",
-    prompt: "Yo soy Ana, encantada.",
-    image: null,
-    words: ["Yo", "soy", "Ana", "encantada", "helado", "tú"],
-    correct: ["Yo", "soy", "Ana", "encantada"]
-  },
-  // 4. Выбор из вариантов (multiple choice)
-  {
-    type: "choice",
-    label: "ВЫБЕРИТЕ ПРАВИЛЬНЫЙ ПЕРЕВОД",
-    title: "Что означает 'Hola'?",
-    prompt: "Hola",
-    image: "👋",
-    choices: [
-      { text: "Привет", correct: true },
-      { text: "Пока", correct: false },
-      { text: "Спасибо", correct: false },
-      { text: "Пожалуйста", correct: false }
+    id: 1,
+    name: "Модуль 1",
+    color: "yellow",
+    lessons: [
+      { id: 1, title: "Урок 1", sub: "Заказывайте в кафе", xp: 20, icon: "🧩" },
+      { id: 2, title: "Урок 2", sub: "Приветствия", xp: 20, icon: "👋" },
+      { id: 3, title: "Урок 3", sub: "Происхождение", xp: 20, icon: "🌍" },
+      { id: 4, title: "Урок 4", sub: "Числа 1-10", xp: 20, icon: "🔢" },
+      { id: 5, title: "Урок 5", sub: "Цвета", xp: 30, icon: "🎨" },
     ]
   },
-  // 5. Сопоставление пар
   {
-    type: "match",
-    label: "СОПОСТАВЬТЕ ПАРЫ",
-    title: "Соедини слова с переводами",
-    prompt: null,
-    image: "🔗",
-    pairs: [
-      { spanish: "Hola", russian: "Привет" },
-      { spanish: "Adiós", russian: "Пока" },
-      { spanish: "Gracias", russian: "Спасибо" },
-      { spanish: "Por favor", russian: "Пожалуйста" }
+    id: 2,
+    name: "Модуль 2",
+    color: "purple",
+    lessons: [
+      { id: 6, title: "Урок 6", sub: "Семья", xp: 20, icon: "👨‍👩‍👧" },
+      { id: 7, title: "Урок 7", sub: "Еда и напитки", xp: 20, icon: "🍕" },
+      { id: 8, title: "Урок 8", sub: "Животные", xp: 20, icon: "🐶" },
+      { id: 9, title: "Урок 9", sub: "Одежда", xp: 20, icon: "👕" },
+      { id: 10, title: "Урок 10", sub: "Дом", xp: 30, icon: "🏠" },
     ]
   },
-  // 6. Заполни пропуск (клавиатура)
   {
-    type: "type",
-    label: "НАПИШИТЕ ПО-ИСПАНСКИ",
-    title: "Переведи фразу",
-    prompt: "Привет",
-    image: "✍️",
-    correctAnswer: "hola"
+    id: 3,
+    name: "Модуль 3",
+    color: "green",
+    lessons: [
+      { id: 11, title: "Урок 11", sub: "Погода", xp: 20, icon: "☀️" },
+      { id: 12, title: "Урок 12", sub: "Время", xp: 20, icon: "⏰" },
+      { id: 13, title: "Урок 13", sub: "Транспорт", xp: 20, icon: "🚗" },
+      { id: 14, title: "Урок 14", sub: "Город", xp: 20, icon: "🏙️" },
+      { id: 15, title: "Урок 15", sub: "Профессии", xp: 30, icon: "👨‍💼" },
+    ]
   },
-  // 7. Картинка → слово
   {
-    type: "image",
-    label: "ЧТО ЭТО?",
-    title: "Выбери правильное слово",
-    prompt: null,
-    image: "☕",
-    imageDesc: "Чашка кофе",
-    choices: [
-      { text: "café", correct: true },
-      { text: "agua", correct: false },
-      { text: "leche", correct: false },
-      { text: "té", correct: false }
+    id: 4,
+    name: "Модуль 4",
+    color: "blue",
+    lessons: [
+      { id: 16, title: "Урок 16", sub: "Хобби", xp: 20, icon: "⚽" },
+      { id: 17, title: "Урок 17", sub: "Путешествия", xp: 20, icon: "✈️" },
+      { id: 18, title: "Урок 18", sub: "Покупки", xp: 20, icon: "🛒" },
+      { id: 19, title: "Урок 19", sub: "Ресторан", xp: 20, icon: "🍽️" },
+      { id: 20, title: "Урок 20", sub: "Больница", xp: 30, icon: "🏥" },
+    ]
+  },
+  {
+    id: 5,
+    name: "Модуль 5",
+    color: "red",
+    lessons: [
+      { id: 21, title: "Урок 21", sub: "Эмоции", xp: 20, icon: "😊" },
+      { id: 22, title: "Урок 22", sub: "Описание", xp: 20, icon: "📝" },
+      { id: 23, title: "Урок 23", sub: "Глаголы", xp: 20, icon: "🏃" },
+      { id: 24, title: "Урок 24", sub: "Вопросы", xp: 20, icon: "❓" },
+      { id: 25, title: "Урок 25", sub: "Итоговый тест", xp: 50, icon: "🏆" },
     ]
   }
 ];
+
+// Flatten all lessons for easier access
+const lessons = MODULES.flatMap(m => m.lessons.map(l => ({ ...l, module: m.id, moduleColor: m.color })));
+
+const TASK_POOL = [
+  // Модуль 1: Базовое
+  { type: "translate", label: "НОВОЕ СЛОВО", title: "Переведи", prompt: "Hola", image: "👋", words: ["Привет"], correct: ["Привет"], module: 1 },
+  { type: "choice", label: "ВЫБЕРИ ПЕРЕВОД", title: "Что означает 'Adiós'?", prompt: "Adiós", image: "👋", choices: [{text: "Пока", correct: true}, {text: "Привет", correct: false}, {text: "Спасибо", correct: false}], module: 1 },
+  { type: "translate", label: "СОБЕРИ ФРАЗУ", title: "Переведи", prompt: "Gracias", image: "🙏", words: ["Спасибо"], correct: ["Спасибо"], module: 1 },
+  { type: "audio", label: "АУДИО", title: "Что услышал?", prompt: "Por favor", words: ["По", "жа", "луй", "ста", "спасибо"], correct: ["По", "жа", "луй", "ста"], module: 1 },
+  { type: "match", label: "СОПОСТАВЬ", title: "Соедини пары", pairs: [{spanish: "Hola", russian: "Привет"}, {spanish: "Adiós", russian: "Пока"}, {spanish: "Gracias", russian: "Спасибо"}], module: 1 },
+  
+  { type: "translate", label: "ЧИСЛА", title: "Переведи число", prompt: "uno", image: "1️⃣", words: ["один"], correct: ["один"], module: 1 },
+  { type: "choice", label: "ВЫБЕРИ", title: "Сколько это?", prompt: "cinco", image: "🔢", choices: [{text: "5", correct: true}, {text: "3", correct: false}, {text: "7", correct: false}], module: 1 },
+  { type: "translate", label: "ЦВЕТА", title: "Какой цвет?", prompt: "rojo", image: "🔴", words: ["красный"], correct: ["красный"], module: 1 },
+  
+  // Модуль 2: Семья и еда
+  { type: "choice", label: "СЕМЬЯ", title: "Кто это?", prompt: "madre", image: "👩", choices: [{text: "мама", correct: true}, {text: "папа", correct: false}, {text: "сестра", correct: false}], module: 2 },
+  { type: "translate", label: "ЕДА", title: "Что это?", prompt: "pan", image: "🍞", words: ["хлеб"], correct: ["хлеб"], module: 2 },
+  { type: "image", label: "НАПИТОК", title: "Выбери слово", image: "☕", imageDesc: "Кофе", choices: [{text: "café", correct: true}, {text: "té", correct: false}, {text: "agua", correct: false}], module: 2 },
+  { type: "match", label: "ЕДА", title: "Соедини", pairs: [{spanish: "agua", russian: "вода"}, {spanish: "pan", russian: "хлеб"}, {spanish: "leche", russian: "молоко"}], module: 2 },
+  { type: "audio", label: "ЖИВОТНЫЕ", title: "Что услышал?", prompt: "El perro es grande", words: ["Собака", "большая", "кот", "маленький"], correct: ["Собака", "большая"], module: 2 },
+  
+  // Модуль 3: Погода и время
+  { type: "choice", label: "ПОГОДА", title: "Какая погода?", prompt: "sol", image: "☀️", choices: [{text: "солнечно", correct: true}, {text: "дождь", correct: false}, {text: "снег", correct: false}], module: 3 },
+  { type: "translate", label: "ВРЕМЯ", title: "Сколько времени?", prompt: "Es la una", image: "⏰", words: ["Час", "дня"], correct: ["Час", "дня"], module: 3 },
+  { type: "type", label: "НАПИШИ", title: "Как сказать 'машина'?", prompt: "машина", image: "🚗", correctAnswer: "coche", module: 3 },
+  
+  // Модуль 4: Путешествия
+  { type: "translate", label: "ПУТЕШЕСТВИЯ", title: "Переведи", prompt: "el avión", image: "✈️", words: ["самолёт"], correct: ["самолёт"], module: 4 },
+  { type: "choice", label: "ГОРОД", title: "Где это?", prompt: "museo", image: "🏛️", choices: [{text: "музей", correct: true}, {text: "парк", correct: false}, {text: "магазин", correct: false}], module: 4 },
+  { type: "match", label: "МЕСТА", title: "Соедини", pairs: [{spanish: "playa", russian: "пляж"}, {spanish: "montaña", russian: "гора"}, {spanish: "río", russian: "река"}], module: 4 },
+  
+  // Модуль 5: Продвинутый
+  { type: "audio", label: "ДИАЛОГ", title: "Что услышал?", prompt: "¿Cómo estás? Estoy bien", words: ["Как", "дела", "хорошо", "плохо"], correct: ["Как", "дела", "хорошо"], module: 5 },
+  { type: "type", label: "НАПИШИ ФРАЗУ", title: "Переведи 'Я студент'", prompt: "Я студент", image: "🎓", correctAnswer: "soy estudiante", module: 5 },
+  { type: "choice", label: "ГРАММАТИКА", title: "Выбери правильный глагол", prompt: "Yo ___ español", choices: [{text: "hablo", correct: true}, {text: "hablas", correct: false}, {text: "habla", correct: false}], module: 5 },
+];
+
+// Function to get tasks for a specific lesson
+function getTasksForLesson(lessonId) {
+  const lesson = lessons.find(l => l.id === lessonId);
+  if (!lesson) return [];
+  
+  // Get tasks from the same module
+  const moduleTasks = TASK_POOL.filter(t => t.module === lesson.module);
+  
+  // Shuffle and take 5 tasks
+  const shuffled = moduleTasks.sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, 5);
+}
+
+const TASKS = TASK_POOL; // Keep for backward compatibility
 
 /* Achievements */
 const ACHIEVEMENTS = [
@@ -388,11 +412,12 @@ let settings = defaultSettings();
 let activeScreen = "home";
 let taskIndex = 0;
 let currentTask = TASKS[0];
+let currentLessonTasks = []; // Задания текущего урока
 let picked = [];
 let lastAnswerWasCorrect = false;
-let correctStreak = 0; // Счётчик правильных ответов подряд
-let selectedPairs = []; // Для сопоставления пар
-let selectedChoice = null; // Для выбора из вариантов
+let correctStreak = 0;
+let selectedPairs = [];
+let selectedChoice = null;
 
 /* Theme */
 function applyTheme(theme) {
@@ -469,35 +494,60 @@ function renderPath() {
   const list = $("pathList");
   list.innerHTML = "";
 
-  lessons.forEach((l, idx) => {
-    const row = document.createElement("div");
-    row.className = "pathRow " + (idx % 2 === 0 ? "left" : "right");
-
-    const node = document.createElement("button");
-    const isCompleted = progress.completed[l.id] === true;
-    const isLocked = idx > 0 && !progress.completed[lessons[idx - 1].id];
-    
-    node.className = "pathNode";
-    if (isCompleted) node.classList.add("completed");
-    if (isLocked) node.classList.add("locked");
-    
-    node.innerHTML = `
-      <div class="nodeIcon">${l.icon}</div>
-      <div class="nodeXp">+${l.xp} XP</div>
-      ${isCompleted ? '<div class="nodeStars">⭐</div>' : ''}
+  MODULES.forEach((module, moduleIdx) => {
+    // Module header
+    const moduleHeader = document.createElement("div");
+    moduleHeader.className = "moduleHeader";
+    moduleHeader.innerHTML = `
+      <div class="moduleName">${module.name}</div>
+      <div class="moduleProgress">${getModuleProgress(module.id)}/5</div>
     `;
+    list.appendChild(moduleHeader);
 
-    if (!isLocked) {
-      node.addEventListener("click", () => {
-        vibrate(50);
-        showToast(`Выбран: ${l.title}`);
-        startPractice(l.id);
-      });
-    }
+    // Module lessons
+    module.lessons.forEach((l, idx) => {
+      const row = document.createElement("div");
+      row.className = "pathRow " + (idx % 2 === 0 ? "left" : "right");
 
-    row.appendChild(node);
-    list.appendChild(row);
+      const node = document.createElement("button");
+      const isCompleted = progress.completed[l.id] === true;
+      const isPrevCompleted = idx === 0 || progress.completed[module.lessons[idx - 1].id];
+      const isLocked = !isPrevCompleted && moduleIdx > 0;
+      
+      node.className = `pathNode pathNode-${module.color}`;
+      if (isCompleted) node.classList.add("completed");
+      if (isLocked) node.classList.add("locked");
+      
+      node.innerHTML = `
+        <div class="nodeIcon">${l.icon}</div>
+        <div class="nodeXp">+${l.xp} XP</div>
+        ${isCompleted ? '<div class="nodeStars">⭐</div>' : ''}
+        ${isLocked ? '<div class="nodeLock">🔒</div>' : ''}
+      `;
+
+      if (!isLocked) {
+        node.addEventListener("click", () => {
+          vibrate(50);
+          showToast(`Начинаем: ${l.title}`);
+          startPractice(l.id);
+        });
+      } else {
+        node.addEventListener("click", () => {
+          vibrate("error");
+          showToast("Сначала пройди предыдущий урок!");
+        });
+      }
+
+      row.appendChild(node);
+      list.appendChild(row);
+    });
   });
+}
+
+function getModuleProgress(moduleId) {
+  const module = MODULES.find(m => m.id === moduleId);
+  if (!module) return 0;
+  return module.lessons.filter(l => progress.completed[l.id]).length;
 }
 
 function renderAchievements() {
