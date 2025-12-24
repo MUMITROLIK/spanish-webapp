@@ -153,49 +153,63 @@ async function saveSettings(settings) {
 }
 
 /* Sounds */
-const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+let audioContext;
+try {
+  audioContext = new (window.AudioContext || window.webkitAudioContext)();
+} catch (e) {
+  console.warn('⚠️ AudioContext недоступен:', e);
+  audioContext = null;
+}
 
 function playSound(type) {
-  if (!settings.sounds) return;
+  if (!settings.sounds || !audioContext) return;
   
-  const osc = audioContext.createOscillator();
-  const gain = audioContext.createGain();
-  
-  osc.connect(gain);
-  gain.connect(audioContext.destination);
-  
-  if (type === 'correct') {
-    osc.frequency.setValueAtTime(523.25, audioContext.currentTime);
-    osc.frequency.setValueAtTime(659.25, audioContext.currentTime + 0.1);
-    osc.frequency.setValueAtTime(783.99, audioContext.currentTime + 0.2);
-    gain.gain.setValueAtTime(0.3, audioContext.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-    osc.start(audioContext.currentTime);
-    osc.stop(audioContext.currentTime + 0.3);
-  } else if (type === 'wrong') {
-    osc.frequency.setValueAtTime(200, audioContext.currentTime);
-    osc.frequency.setValueAtTime(150, audioContext.currentTime + 0.15);
-    gain.gain.setValueAtTime(0.2, audioContext.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-    osc.start(audioContext.currentTime);
-    osc.stop(audioContext.currentTime + 0.3);
+  try {
+    const osc = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    
+    osc.connect(gain);
+    gain.connect(audioContext.destination);
+    
+    if (type === 'correct') {
+      osc.frequency.setValueAtTime(523.25, audioContext.currentTime);
+      osc.frequency.setValueAtTime(659.25, audioContext.currentTime + 0.1);
+      osc.frequency.setValueAtTime(783.99, audioContext.currentTime + 0.2);
+      gain.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+      osc.start(audioContext.currentTime);
+      osc.stop(audioContext.currentTime + 0.3);
+    } else if (type === 'wrong') {
+      osc.frequency.setValueAtTime(200, audioContext.currentTime);
+      osc.frequency.setValueAtTime(150, audioContext.currentTime + 0.15);
+      gain.gain.setValueAtTime(0.2, audioContext.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+      osc.start(audioContext.currentTime);
+      osc.stop(audioContext.currentTime + 0.3);
+    }
+  } catch (e) {
+    console.warn('⚠️ Ошибка воспроизведения звука:', e);
   }
 }
 
 function vibrate(pattern) {
-  if (!settings.vibration) return;
+  if (!settings || !settings.vibration) return;
   
-  const TG = tg();
-  if (TG?.HapticFeedback) {
-    if (pattern === 'success') {
-      TG.HapticFeedback.notificationOccurred('success');
-    } else if (pattern === 'error') {
-      TG.HapticFeedback.notificationOccurred('error');
-    } else {
-      TG.HapticFeedback.impactOccurred('medium');
+  try {
+    const TG = tg();
+    if (TG?.HapticFeedback) {
+      if (pattern === 'success') {
+        TG.HapticFeedback.notificationOccurred('success');
+      } else if (pattern === 'error') {
+        TG.HapticFeedback.notificationOccurred('error');
+      } else {
+        TG.HapticFeedback.impactOccurred('medium');
+      }
+    } else if (navigator.vibrate) {
+      navigator.vibrate(pattern);
     }
-  } else if (navigator.vibrate) {
-    navigator.vibrate(pattern);
+  } catch (e) {
+    console.warn('⚠️ Ошибка вибрации:', e);
   }
 }
 
@@ -316,7 +330,7 @@ function showAchievement(achievement) {
 
 /* State */
 let progress = defaultProgress();
-let settings = defaultSettings();
+let settings = defaultSettings(); // Инициализируем сразу значениями по умолчанию
 let activeScreen = "home";
 let taskIndex = 0;
 let currentTask = TASKS[0];
@@ -846,7 +860,29 @@ async function init() {
 
 document.addEventListener("DOMContentLoaded", () => {
   init().catch((e) => {
-    console.error(e);
-    showToast("JS упал: смотри Console (F12)");
+    console.error("❌ Критическая ошибка:", e);
+    console.error("Stack trace:", e.stack);
+    
+    // Показываем пользователю читаемую ошибку
+    const errorMsg = `Ошибка инициализации: ${e.message}`;
+    showToast(errorMsg, 5000);
+    
+    // Пытаемся показать хотя бы главный экран
+    try {
+      const home = document.getElementById("screenHome");
+      if (home) home.classList.add("isActive");
+    } catch (e2) {
+      console.error("Не удалось показать главный экран:", e2);
+    }
   });
+});
+
+// Глобальный обработчик ошибок
+window.addEventListener('error', (e) => {
+  console.error('🔥 Глобальная ошибка:', e.error);
+  console.error('В файле:', e.filename, 'строка:', e.lineno);
+});
+
+window.addEventListener('unhandledrejection', (e) => {
+  console.error('🔥 Необработанный Promise:', e.reason);
 });
