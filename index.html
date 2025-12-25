@@ -39,17 +39,12 @@
           </div>
         </div>
 
-        <div class="bigCard">
-          <h1>Начни учиться прямо сейчас</h1>
-          <p>Кликаешь урок → проходишь задания → получаешь XP. Без лимитов 😉</p>
-          <div class="btnRow">
-            <button id="btnContinue" class="btnPrimary">Продолжить</button>
-          </div>
-          <div class="btnRow">
-            <button id="btnSync" class="btnGhost">Синк</button>
-            <button id="btnExport" class="btnGhost">Экспорт</button>
-            <button id="btnImport" class="btnGhost">Импорт</button>
-          </div>
+        <div class="bigCard" style="background: linear-gradient(135deg, var(--duo-green) 0%, var(--duo-green-dark) 100%); color: white; border: none;">
+          <h1 style="color: white;">Начни учиться прямо сейчас 🚀</h1>
+          <p style="color: rgba(255,255,255,0.9);">Кликай урок → проходи задания → получай XP</p>
+          <button id="btnContinue" class="btnPrimary" style="background: white; color: var(--duo-green); box-shadow: 0 6px 0 rgba(0,0,0,0.2); margin-top: 12px; width: 100%;">
+            ПРОДОЛЖИТЬ
+          </button>
         </div>
 
         <div class="smallGrid">
@@ -61,6 +56,17 @@
             <div class="smallTitle">Точность</div>
             <div class="smallMeta"><span id="acc">0</span>%</div>
           </div>
+        </div>
+
+        <div class="smallGrid" style="margin-top: 24px;">
+          <button id="btnSync" class="iconBtn" style="height: 60px; width: 100%; font-size: 14px; font-weight: 700; display: flex; flex-direction: column; gap: 4px; align-items: center; justify-content: center;">
+            <span style="font-size: 24px;">☁️</span>
+            <span>Синк</span>
+          </button>
+          <button id="btnExport" class="iconBtn" style="height: 60px; width: 100%; font-size: 14px; font-weight: 700; display: flex; flex-direction: column; gap: 4px; align-items: center; justify-content: center;">
+            <span style="font-size: 24px;">📤</span>
+            <span>Экспорт</span>
+          </button>
         </div>
       </section>
 
@@ -108,18 +114,19 @@
         </div>
       </section>
 
+      <!-- VOCABULARY -->
+      <section id="screenVocab" class="screen">
+        <div class="sectionHead">
+          <div class="sectionTitle">Словарь 📚</div>
+          <div class="sectionHint">Твои изученные слова</div>
+        </div>
+        <div class="bigCard">
+          <div id="vocabList" class="vocabList"></div>
+        </div>
+      </section>
+
       <!-- STATS -->
       <section id="screenStats" class="screen">
-      <!-- VOCABULARY -->
-<section id="screenVocab" class="screen">
-  <div class="sectionHead">
-    <div class="sectionTitle">Словарь 📚</div>
-    <div class="sectionHint">Твои изученные слова</div>
-  </div>
-  <div class="bigCard">
-    <div id="vocabList" class="vocabList"></div>
-  </div>
-</section>
         <div class="sectionHead">
           <div class="sectionTitle">Статистика 📊</div>
           <div class="sectionHint">Твой прогресс</div>
@@ -147,26 +154,28 @@
 
         <div class="bigCard">
           <div class="settingSection">
-  <div class="settingTitle">Информация о системе</div>
-  <div class="settingItem" style="flex-direction: column; align-items: flex-start; gap: 8px;">
-    <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-      <div class="settingLabel">Часовой пояс</div>
-      <div id="timezoneDisplay" style="font-size: 13px; color: var(--duo-blue); font-weight: 700;">—</div>
-    </div>
-    <div style="font-size: 12px; color: var(--text-light);">
-      Текущее время: <span id="currentTimeDisplay" style="font-weight: 700; color: var(--text);">—</span>
-    </div>
-    <div style="font-size: 12px; color: var(--text-light);">
-      Сегодня: <span id="todayKeyDisplay" style="font-weight: 700; color: var(--text);">—</span>
-    </div>
-    <div style="font-size: 12px; color: var(--text-light);">
-      Последняя активность: <span id="lastActiveDisplay" style="font-weight: 700; color: var(--text);">—</span>
-    </div>
-    <div style="font-size: 12px; color: var(--text-light);">
-      Серия: <span id="streakDisplay" style="font-weight: 700; color: var(--duo-green);">—</span>
-    </div>
-  </div>
-</div>
+            <div class="settingTitle">Информация о системе</div>
+            <div class="settingItem" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                <div class="settingLabel">Часовой пояс</div>
+                <div id="timezoneDisplay" style="font-size: 13px; color: var(--duo-blue); font-weight: 700;">—</div>
+              </div>
+              <div style="font-size: 12px; color: var(--text-light);">
+                Текущее время: <span id="currentTimeDisplay" style="font-weight: 700; color: var(--text);">—</span>
+              </div>
+              <div style="font-size: 12px; color: var(--text-light);">
+                Сегодня: <span id="todayKeyDisplay" style="font-weight: 700; color: var(--text);">—</span>
+              </div>
+              <div style="font-size: 12px; color: var(--text-light);">
+                Последняя активность: <span id="lastActiveDisplay" style="font-weight: 700; color: var(--text);">—</span>
+              </div>
+              <div style="font-size: 12px; color: var(--text-light);">
+                Серия: <span id="streakDisplay" style="font-weight: 700; color: var(--duo-green);">—</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="settingSection">
             <div class="settingTitle">Тема оформления</div>
             <div class="themeGrid">
               <button class="themeBtn active" data-theme="light" type="button">
@@ -215,13 +224,13 @@
 
     <!-- TABS -->
     <nav class="tabs">
-  <button class="tab isActive" data-go="home">🏠<br>Главная</button>
-  <button class="tab" data-go="path">🗺️<br>Путь</button>
-  <button class="tab" data-go="practice">🎯<br>Практика</button>
-  <button class="tab" data-go="vocab">📚<br>Словарь</button>
-  <button class="tab" data-go="stats">📊<br>Статы</button>
-  <button class="tab" data-go="settings">⚙️<br>Настройки</button>
-</nav>
+      <button class="tab isActive" data-go="home">🏠<br>Главная</button>
+      <button class="tab" data-go="path">🗺️<br>Путь</button>
+      <button class="tab" data-go="practice">🎯<br>Практика</button>
+      <button class="tab" data-go="vocab">📚<br>Словарь</button>
+      <button class="tab" data-go="stats">📊<br>Статы</button>
+      <button class="tab" data-go="settings">⚙️<br>Настройки</button>
+    </nav>
   </div>
 
   <!-- MODAL -->

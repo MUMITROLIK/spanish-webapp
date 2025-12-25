@@ -233,6 +233,21 @@ function playSound(type) {
     console.warn('⚠️ Ошибка воспроизведения звука:', e);
   }
 }
+function createClickParticles(event, color) {
+  // Простая заглушка для частиц
+  const colors = {
+    yellow: '#FFC800',
+    purple: '#CE82FF',
+    green: '#58CC02',
+    blue: '#1CB0F6',
+    red: '#FF4B4B'
+  };
+  
+  const particleColor = colors[color] || colors.green;
+  
+  // Можно добавить анимацию позже, пока просто ничего не делаем
+  console.log('✨ Клик частицы:', particleColor);
+}
 
 function vibrate(pattern) {
   if (!settings || !settings.vibration) return;
@@ -562,26 +577,34 @@ function renderPath() {
   list.innerHTML = "";
 
   MODULES.forEach((module, moduleIdx) => {
-    // Заголовок модуля с прогрессом
+    // Заголовок модуля с прогресс-баром
     const moduleHeader = document.createElement("div");
     moduleHeader.className = "moduleHeader";
     const moduleProgress = getModuleProgress(module.id);
     const isModuleComplete = moduleProgress === module.lessons.length;
+    const progressPercent = (moduleProgress / module.lessons.length) * 100;
     
     moduleHeader.innerHTML = `
-      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-        <div style="flex: 1;">
-          <div class="moduleName" style="font-size: 20px; font-weight: 800; color: var(--text); margin-bottom: 4px;">
-            ${module.name}
-          </div>
-          <div style="font-size: 14px; color: var(--text-light);">
-            ${moduleProgress} / ${module.lessons.length} уроков
+      <div>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+          <div class="moduleName">${module.name}</div>
+          <div style="font-size: 16px; font-weight: 800; color: var(--text);">
+            ${moduleProgress}/${module.lessons.length}
           </div>
         </div>
-        ${isModuleComplete ? '<div style="font-size: 32px;">🏆</div>' : ''}
-      </div>
-      <div style="background: var(--bg-gray); height: 8px; border-radius: 999px; overflow: hidden; margin-bottom: 32px;">
-        <div style="height: 100%; width: ${(moduleProgress / module.lessons.length) * 100}%; background: linear-gradient(90deg, ${getModuleColor(module.color)} 0%, ${getModuleColorDark(module.color)} 100%); border-radius: 999px; transition: width 0.5s ease;"></div>
+        
+        <div class="moduleProgressBar">
+          <div class="moduleProgressFill" style="width: ${progressPercent}%"></div>
+        </div>
+        
+        ${isModuleComplete ? `
+          <div style="text-align: center; margin-top: 16px;">
+            <div style="font-size: 40px; animation: bounce 0.5s ease;">🏆</div>
+            <div style="font-size: 14px; font-weight: 700; color: var(--duo-green); margin-top: 8px;">
+              Модуль завершён!
+            </div>
+          </div>
+        ` : ''}
       </div>
     `;
     list.appendChild(moduleHeader);
@@ -589,7 +612,14 @@ function renderPath() {
     // Уроки модуля
     module.lessons.forEach((l, idx) => {
       const row = document.createElement("div");
-      row.className = "pathRow " + (idx % 2 === 0 ? "left" : "right");
+      row.className = "pathRow";
+      
+      // Добавляем класс для зигзага (чётные влево, нечётные вправо)
+      if (idx % 2 === 0) {
+        row.classList.add("pathRow-left");
+      } else {
+        row.classList.add("pathRow-right");
+      }
 
       const node = document.createElement("button");
       const isCompleted = progress.completed[l.id] === true;
@@ -604,17 +634,18 @@ function renderPath() {
       
       node.innerHTML = `
         <div class="nodeIcon">${l.icon}</div>
-        <div class="nodeXp">+${l.xp} XP</div>
+        <div class="nodeXp">+${l.xp}</div>
         ${isCompleted ? '<div class="nodeStars">⭐</div>' : ''}
         ${isLocked ? '<div class="nodeLock">🔒</div>' : ''}
         ${isCurrent ? '<div class="nodePulse"></div>' : ''}
       `;
 
       if (!isLocked) {
-        node.addEventListener("click", () => {
+        node.addEventListener("click", (e) => {
           vibrate(50);
+          createClickParticles(e, module.color);
           showToast(`Начинаем: ${l.title}`);
-          startPractice(l.id);
+          setTimeout(() => startPractice(l.id), 300);
         });
       } else {
         node.addEventListener("click", () => {
@@ -625,53 +656,72 @@ function renderPath() {
 
       row.appendChild(node);
       list.appendChild(row);
+      
+      // Добавляем линию с классом направления
+      if (idx < module.lessons.length - 1) {
+        const connectLine = document.createElement("div");
+        connectLine.className = "pathConnectLine";
+        
+        // Чётный урок -> линия идёт вправо
+        // Нечётный урок -> линия идёт влево
+        if (idx % 2 === 0) {
+          connectLine.classList.add("connectLine-right");
+        } else {
+          connectLine.classList.add("connectLine-left");
+        }
+        
+        list.appendChild(connectLine);
+      }
     });
   });
 }
 
-function getModuleColor(color) {
-  const colors = {
-    yellow: '#FFC800',
-    purple: '#CE82FF',
-    green: '#58CC02',
-    blue: '#1CB0F6',
-    red: '#FF4B4B'
-  };
-  return colors[color] || colors.green;
-}
-
-function getModuleColorDark(color) {
-  const colors = {
-    yellow: '#E6B000',
-    purple: '#A855F7',
-    green: '#46A302',
-    blue: '#1290C6',
-    red: '#CC3939'
-  };
-  return colors[color] || colors.green;
-}
-
 function renderVocab() {
   const vocabList = $("vocabList");
-  if (!vocabList) return;
+  if (!vocabList) {
+    console.log('❌ vocabList элемент не найден');
+    return;
+  }
+  
+  console.log('📚 renderVocab начала работу');
+  console.log('📦 progress.vocab:', progress.vocab);
   
   vocabList.innerHTML = "";
   
   // Инициализируем vocab если его нет
   if (!progress.vocab) {
     progress.vocab = {};
+    console.log('📚 Инициализирован пустой vocab');
   }
   
-  const words = Object.entries(progress.vocab)
-    .sort((a, b) => {
-      // Сначала новые слова
-      if (a[1].isNew && !b[1].isNew) return -1;
-      if (!a[1].isNew && b[1].isNew) return 1;
-      // Потом по дате добавления (новые первые)
-      return b[1].firstSeen - a[1].firstSeen;
-    });
+  // Конвертируем старый формат в новый
+  const vocabEntries = Object.entries(progress.vocab).map(([key, value]) => {
+    // Если это старый формат (строка вместо объекта)
+    if (typeof value === 'string') {
+      return [key, {
+        word: key,
+        spanish: key,
+        firstSeen: Date.now(),
+        timesCorrect: 1,
+        isNew: false
+      }];
+    }
+    // Если это уже объект
+    return [key, value];
+  });
+  
+  console.log('📊 Конвертированные записи:', vocabEntries);
+  
+  const words = vocabEntries.sort((a, b) => {
+    // Сначала новые слова
+    if (a[1].isNew && !b[1].isNew) return -1;
+    if (!a[1].isNew && b[1].isNew) return 1;
+    // Потом по дате добавления (новые первые)
+    return b[1].firstSeen - a[1].firstSeen;
+  });
   
   if (words.length === 0) {
+    console.log('📭 Словарь пустой, показываем плейсхолдер');
     vocabList.innerHTML = `
       <div style="text-align: center; padding: 60px 20px; color: var(--text-light);">
         <div style="font-size: 64px; margin-bottom: 20px;">📚</div>
@@ -683,6 +733,8 @@ function renderVocab() {
     `;
     return;
   }
+  
+  console.log(`✅ Найдено ${words.length} слов для отображения`);
   
   // Статистика сверху
   const statsCard = document.createElement("div");
@@ -696,6 +748,8 @@ function renderVocab() {
   
   const newWordsCount = words.filter(([, data]) => data.isNew).length;
   const learnedWordsCount = words.filter(([, data]) => !data.isNew).length;
+  
+  console.log(`📈 Статистика: ${newWordsCount} новых, ${learnedWordsCount} изучено`);
   
   statsCard.innerHTML = `
     <div style="font-size: 16px; opacity: 0.9; margin-bottom: 16px;">Твой прогресс</div>
@@ -714,7 +768,9 @@ function renderVocab() {
   vocabList.appendChild(statsCard);
   
   // Список слов
-  words.forEach(([key, data]) => {
+  words.forEach(([key, data], index) => {
+    console.log(`  Слово ${index + 1}/${words.length}:`, key, data);
+    
     const wordCard = document.createElement("div");
     wordCard.className = "vocabCard";
     
@@ -722,25 +778,28 @@ function renderVocab() {
       wordCard.style.borderLeft = "4px solid #CE82FF";
     }
     
-    const date = new Date(data.firstSeen);
+    const date = new Date(data.firstSeen || Date.now());
     const dateStr = date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+    
+    const displayWord = data.spanish || data.word || key;
+    const timesCorrect = data.timesCorrect || 1;
     
     wordCard.innerHTML = `
       <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
         <div style="flex: 1;">
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
             <div style="font-size: 22px; font-weight: 800; color: var(--text);">
-              ${data.spanish || data.word}
+              ${displayWord}
             </div>
             ${data.isNew ? '<span style="background: linear-gradient(135deg, #CE82FF 0%, #A855F7 100%); color: white; font-size: 10px; font-weight: 800; padding: 4px 8px; border-radius: 6px; text-transform: uppercase;">Новое</span>' : ''}
           </div>
           <div style="font-size: 13px; color: var(--text-light); display: flex; align-items: center; gap: 12px;">
-            <span>✅ ${data.timesCorrect} раз</span>
+            <span>✅ ${timesCorrect} раз</span>
             <span>•</span>
             <span>📅 ${dateStr}</span>
           </div>
         </div>
-        <button class="iconBtn" onclick="speakES('${data.spanish || data.word}'); vibrate(50);" style="flex-shrink: 0;">
+        <button class="iconBtn" onclick="speakES('${displayWord}'); vibrate(50);" style="flex-shrink: 0;">
           🔊
         </button>
       </div>
@@ -748,8 +807,9 @@ function renderVocab() {
     
     vocabList.appendChild(wordCard);
   });
+  
+  console.log('✅ renderVocab завершена');
 }
-
 function getModuleProgress(moduleId) {
   const module = MODULES.find(m => m.id === moduleId);
   if (!module) return 0;
@@ -1611,6 +1671,7 @@ function closeModal(result) {
   }
 }
 
+
 /* Exit/Back */
 function exitOrBack() {
   if (activeScreen !== "home") {
@@ -1636,6 +1697,22 @@ async function init() {
   
   // Сохраняем часовой пояс пользователя
   saveUserTimezone();
+  
+  // МИГРАЦИЯ: Очищаем старый формат vocab
+  if (progress.vocab) {
+    let needsMigration = false;
+    Object.entries(progress.vocab).forEach(([key, value]) => {
+      if (typeof value === 'string') {
+        needsMigration = true;
+        delete progress.vocab[key];
+      }
+    });
+    
+    if (needsMigration) {
+      console.log('🔄 Очищены старые данные словаря');
+      await saveProgress(progress);
+    }
+  }
   
   ensureDay(progress);
   await saveProgress(progress);

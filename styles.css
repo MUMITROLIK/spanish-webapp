@@ -108,10 +108,32 @@ body {
 }
 
 /* Screens */
+/* Screens with transitions */
 .screenHost { 
   padding: 16px; 
   max-width: 800px; 
-  margin: 0 auto; 
+  margin: 0 auto;
+  position: relative;
+}
+
+.screen { 
+  display: none;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.screen.isActive { 
+  display: block; 
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .screen { display: none; }
@@ -166,55 +188,59 @@ body {
 
 .bigCard {
   background: var(--bg);
-  border-radius: 20px;
-  padding: 24px;
-  margin-bottom: 16px;
-  box-shadow: var(--shadow);
+  border-radius: 24px;
+  padding: 28px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.08);
+  border: 1px solid var(--border);
+  transition: all .3s;
+}
+
+.bigCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,.12);
 }
 
 .bigCard h1 {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 800;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   color: var(--text);
+  line-height: 1.3;
 }
 
 .bigCard p {
   color: var(--text-light);
-  line-height: 1.6;
-  margin-bottom: 20px;
-}
-
-.btnRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 12px;
+  line-height: 1.7;
+  margin-bottom: 24px;
+  font-size: 15px;
 }
 
 .btnPrimary {
-  background: var(--duo-green);
+  background: linear-gradient(180deg, var(--duo-green) 0%, #46A302 100%);
   color: white;
   border: none;
   border-radius: 16px;
-  padding: 16px 32px;
+  padding: 18px 36px;
   font-weight: 800;
-  font-size: 16px;
+  font-size: 17px;
   cursor: pointer;
-  box-shadow: 0 4px 0 var(--duo-green-dark);
-  transition: all .1s;
+  box-shadow: 0 6px 0 var(--duo-green-dark), 0 8px 16px rgba(88, 204, 2, .3);
+  transition: all .15s cubic-bezier(0.34, 1.56, 0.64, 1);
   flex: 1;
   min-width: 160px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .btnPrimary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 0 var(--duo-green-dark);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 0 var(--duo-green-dark), 0 12px 24px rgba(88, 204, 2, .4);
 }
 
 .btnPrimary:active {
-  transform: translateY(2px);
-  box-shadow: 0 2px 0 var(--duo-green-dark);
+  transform: translateY(3px);
+  box-shadow: 0 3px 0 var(--duo-green-dark), 0 4px 8px rgba(88, 204, 2, .2);
 }
 
 .btnPrimary:disabled {
@@ -222,8 +248,8 @@ body {
   color: var(--text-light);
   box-shadow: 0 4px 0 #D0D0D0;
   cursor: not-allowed;
+  transform: none;
 }
-
 .btnGhost {
   background: var(--bg);
   color: var(--duo-blue);
@@ -269,22 +295,27 @@ body {
   color: var(--text);
 }
 
-/* Path - НОВАЯ КРАСИВАЯ СПИРАЛЬ */
+/* Path - DUOLINGO-STYLE PATH */
 .sectionHead {
-  margin-bottom: 32px;
+  margin-bottom: 40px;
   text-align: center;
+  padding: 0 20px;
 }
 
 .sectionTitle {
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 800;
-  color: var(--text);
-  margin-bottom: 8px;
+  background: linear-gradient(135deg, var(--duo-blue) 0%, var(--duo-purple) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 12px;
 }
 
 .sectionHint {
   color: var(--text-light);
-  font-size: 16px;
+  font-size: 18px;
+  font-weight: 500;
 }
 
 .pathList {
@@ -292,93 +323,90 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 0;
-  padding: 40px 20px;
+  padding: 20px;
   position: relative;
+  max-width: 500px;
+  margin: 0 auto;
 }
 
 .pathRow {
   position: relative;
   width: 100%;
-  max-width: 600px;
   display: flex;
-  margin: 30px 0;
+  margin: 20px 0;
   z-index: 2;
 }
 
-.pathRow.left { 
+/* Зигзаг: чётные слева, нечётные справа */
+.pathRow-left {
   justify-content: flex-start;
+  padding-left: 8%;
 }
 
-.pathRow.right { 
+.pathRow-right {
   justify-content: flex-end;
+  padding-right: 8%;
 }
 
-/* Connecting Line */
-.pathRow::after {
-  content: '';
-  position: absolute;
-  width: 4px;
-  height: 80px;
-  background: var(--border);
-  border-radius: 4px;
-  z-index: 0;
-  top: 100%;
-  transition: background .3s;
+.pathConnectLine {
+  width: 6px;
+  height: 80px; /* Увеличили высоту */
+  background: linear-gradient(180deg, var(--border) 0%, var(--border) 100%);
+  border-radius: 3px;
+  position: relative;
+  z-index: 1;
+  transform-origin: top center;
 }
 
-.pathRow.left::after {
-  left: 60px;
+/* Линия вправо (после левого урока) */
+.connectLine-right {
+  margin-left: 20%;
+  margin-right: auto;
+  transform: rotate(35deg); /* Сильнее наклон */
 }
 
-.pathRow.right::after {
-  right: 60px;
+/* Линия влево (после правого урока) */
+.connectLine-left {
+  margin-left: auto;
+  margin-right: 20%;
+  transform: rotate(-35deg); /* Сильнее наклон */
 }
 
-.pathRow:last-child::after {
-  display: none;
+.pathRow:nth-child(odd) {
+  justify-content: flex-end;
+  padding-right: 10%;
 }
 
-/* Curved connecting lines */
-.pathRow.left::before {
-  content: '';
-  position: absolute;
-  width: 100px;
-  height: 100px;
-  border: 4px solid var(--border);
-  border-left: none;
-  border-top: none;
-  border-radius: 0 0 60px 0;
-  top: 100%;
-  left: 60px;
-  z-index: 0;
+.pathConnectLine {
+  width: 6px;
+  height: 60px;
+  background: linear-gradient(180deg, var(--border) 0%, var(--border) 100%);
+  border-radius: 3px;
+  position: relative;
+  z-index: 1;
+  transform-origin: top center;
 }
 
-.pathRow.right::before {
-  content: '';
-  position: absolute;
-  width: 100px;
-  height: 100px;
-  border: 4px solid var(--border);
-  border-right: none;
-  border-top: none;
-  border-radius: 0 0 0 60px;
-  top: 100%;
-  right: 60px;
-  z-index: 0;
+/* Линия влево для чётных */
+.pathConnectLine:nth-child(4n+2) {
+  margin: 0 60% 0 20%;
+  transform: rotate(-15deg);
 }
 
-.pathRow:last-child::before,
-.pathRow:nth-last-child(2)::before {
-  display: none;
+/* Линия вправо для нечётных */
+.pathConnectLine:nth-child(4n) {
+  margin: 0 20% 0 60%;
+  transform: rotate(15deg);
 }
+
 
 .pathNode {
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
+  width: 90px;
+  height: 90px;
+  border-radius: 24px;
   background: var(--bg);
-  border: 6px solid var(--duo-green);
-  box-shadow: var(--shadow-lg), 0 0 0 12px var(--bg-gray);
+  border: 4px solid var(--duo-green);
+  box-shadow: var(--shadow-lg), 0 0 0 8px var(--bg-gray);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -411,14 +439,34 @@ body {
 }
 
 .pathNode:hover {
-  transform: scale(1.15) rotate(5deg);
+  transform: scale(1.1) translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0,0,0,.15), 0 0 0 8px var(--bg-gray);
 }
 
-.pathNode-yellow:hover { box-shadow: 0 8px 24px rgba(255, 200, 0, .4), 0 0 0 12px var(--bg-gray); }
-.pathNode-purple:hover { box-shadow: 0 8px 24px rgba(206, 130, 255, .4), 0 0 0 12px var(--bg-gray); }
-.pathNode-green:hover { box-shadow: 0 8px 24px rgba(88, 204, 2, .4), 0 0 0 12px var(--bg-gray); }
-.pathNode-blue:hover { box-shadow: 0 8px 24px rgba(28, 176, 246, .4), 0 0 0 12px var(--bg-gray); }
-.pathNode-red:hover { box-shadow: 0 8px 24px rgba(255, 75, 75, .4), 0 0 0 12px var(--bg-gray); }
+.pathNode-yellow:hover { 
+  box-shadow: 0 12px 32px rgba(255, 200, 0, .5), 0 0 0 8px var(--bg-gray);
+  border-color: #FFD700;
+}
+
+.pathNode-purple:hover { 
+  box-shadow: 0 12px 32px rgba(206, 130, 255, .5), 0 0 0 8px var(--bg-gray);
+  border-color: #B070FF;
+}
+
+.pathNode-green:hover { 
+  box-shadow: 0 12px 32px rgba(88, 204, 2, .5), 0 0 0 8px var(--bg-gray);
+  border-color: #6EE000;
+}
+
+.pathNode-blue:hover { 
+  box-shadow: 0 12px 32px rgba(28, 176, 246, .5), 0 0 0 8px var(--bg-gray);
+  border-color: #2CC5FF;
+}
+
+.pathNode-red:hover { 
+  box-shadow: 0 12px 32px rgba(255, 75, 75, .5), 0 0 0 8px var(--bg-gray);
+  border-color: #FF6666;
+}
 
 .pathNode.locked {
   background: var(--bg-gray);
@@ -444,18 +492,19 @@ body {
 .pathNode::before {
   content: '';
   position: absolute;
-  width: 136px;
-  height: 136px;
-  border-radius: 50%;
+  width: 102px;
+  height: 102px;
+  border-radius: 26px;
   border: 3px solid transparent;
   border-top-color: var(--duo-green);
+  border-right-color: var(--duo-green);
   opacity: 0;
   transition: opacity .3s;
   animation: spin 2s linear infinite;
 }
 
 .pathNode:hover::before {
-  opacity: 0.3;
+  opacity: 0.6;
 }
 
 @keyframes spin {
@@ -463,23 +512,25 @@ body {
 }
 
 .nodeIcon {
-  font-size: 48px;
-  margin-bottom: 8px;
+  font-size: 40px;
+  margin-bottom: 4px;
   transition: transform .3s;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,.1));
 }
 
 .pathNode:hover .nodeIcon {
-  transform: scale(1.2);
+  transform: scale(1.15);
 }
 
 .nodeXp {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   color: white;
   background: var(--duo-green);
-  padding: 4px 10px;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(88, 204, 2, .3);
+  padding: 3px 8px;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(88, 204, 2, .4);
+  margin-top: 4px;
 }
 
 .pathNode.locked .nodeXp {
@@ -495,34 +546,172 @@ body {
 /* Stars for completed lessons */
 .nodeStars {
   position: absolute;
-  top: -8px;
-  right: -8px;
-  background: var(--duo-yellow);
-  width: 32px;
-  height: 32px;
+  top: -6px;
+  right: -6px;
+  background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
-  box-shadow: 0 2px 8px rgba(255, 200, 0, .5);
+  font-size: 14px;
+  box-shadow: 0 4px 12px rgba(255, 200, 0, .6);
   border: 3px solid var(--bg);
+  animation: starPulse 2s ease-in-out infinite;
+}
+
+@keyframes starPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
 }
 
 /* Lock for locked lessons */
 .nodeLock {
   position: absolute;
-  top: -8px;
-  right: -8px;
+  top: -6px;
+  right: -6px;
   background: var(--border);
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 14px;
   border: 3px solid var(--bg);
+}
+
+/* Current Lesson Pulse */
+.pathNode.current {
+  position: relative;
+  animation: currentBounce 2s ease-in-out infinite;
+  border-color: var(--duo-green);
+  box-shadow: 0 8px 24px rgba(88, 204, 2, .5), 0 0 0 8px rgba(88, 204, 2, .1);
+}
+
+@keyframes currentBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+.nodePulse {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 16px;
+  height: 16px;
+  background: var(--duo-green);
+  border-radius: 50%;
+  border: 3px solid var(--bg);
+  animation: pulsate 1.5s ease-in-out infinite;
+  box-shadow: 0 0 12px rgba(88, 204, 2, .8);
+}
+
+@keyframes pulsate {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.6; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Module Header */
+.moduleHeader {
+  margin: 60px 0 40px;
+  padding: 0;
+  width: 100%;
+}
+
+.moduleHeader > div:first-child {
+  background: var(--bg);
+  border-radius: 24px;
+  padding: 24px;
+  box-shadow: var(--shadow-lg);
+  border: 3px solid transparent;
+  background-image: linear-gradient(var(--bg), var(--bg)), linear-gradient(135deg, var(--duo-blue), var(--duo-purple));
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+}
+
+.moduleName {
+  font-size: 24px;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--duo-blue) 0%, var(--duo-purple) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.moduleHeader .moduleProgressBar {
+  height: 12px;
+  background: var(--bg-gray);
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+
+.moduleHeader .moduleProgressFill {
+  height: 100%;
+  background: linear-gradient(90deg, #58CC02 0%, #46A302 100%);
+  border-radius: 999px;
+  transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.moduleHeader .moduleProgressFill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Particle effects */
+.clickParticle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: particleExplode 0.8s ease-out forwards;
+}
+
+@keyframes particleExplode {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--tx), var(--ty)) scale(0);
+    opacity: 0;
+  }
+}
+
+/* Shimmer effect for completed lessons */
+.pathNode.completed::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  right: -4px;
+  bottom: -4px;
+  border-radius: 26px;
+  background: linear-gradient(45deg, transparent, rgba(255, 215, 0, 0.3), transparent);
+  animation: shimmerMove 3s infinite;
+  z-index: -1;
+}
+
+@keyframes shimmerMove {
+  0% { transform: translateX(-100%) rotate(45deg); }
+  100% { transform: translateX(100%) rotate(45deg); }
 }
 
 /* Practice */
@@ -1379,22 +1568,36 @@ body {
   box-shadow: var(--shadow-lg);
 }
 
+
 /* Mobile */
 @media (max-width: 600px) {
   .heroTitle { font-size: 24px; }
   .heroStats { flex-direction: column; }
   .heroStat { width: 100%; }
-  .pathNode { width: 100px; height: 100px; }
-  .pathNode::before { width: 116px; height: 116px; }
-  .nodeIcon { font-size: 36px; }
-  .nodeStars { width: 28px; height: 28px; font-size: 14px; }
-  .pathRow.left::before,
-  .pathRow.right::before {
-    width: 60px;
-    height: 60px;
+  
+  /* Адаптируем path для мобилок */
+  .pathNode { 
+    width: 80px; 
+    height: 80px; 
+    border-radius: 20px;
   }
-  .pathRow.left::after { left: 50px; }
-  .pathRow.right::after { right: 50px; }
+  .pathNode::before { 
+    width: 92px; 
+    height: 92px; 
+    border-radius: 22px;
+  }
+  .nodeIcon { font-size: 32px; }
+  .nodeXp { font-size: 10px; padding: 2px 6px; }
+  .nodeStars { width: 24px; height: 24px; font-size: 12px; }
+  .nodeLock { width: 24px; height: 24px; font-size: 12px; }
+  
+  .pathRow .connectLine {
+    height: 30px;
+  }
+  
+  .sectionTitle { font-size: 28px; }
+  .sectionHint { font-size: 16px; }
+  
   .btnRow { flex-direction: column; }
   .btnPrimary, .btnGhost { min-width: 100%; }
   .achievementGrid { grid-template-columns: repeat(2, 1fr); }
